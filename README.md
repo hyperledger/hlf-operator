@@ -222,13 +222,13 @@ EOF
 
 ```bash
 export PEER_IMAGE=hyperledger/fabric-peer
-export PEER_VERSION=2.5.9
+export PEER_VERSION=2.5.10
 
 export ORDERER_IMAGE=hyperledger/fabric-orderer
-export ORDERER_VERSION=2.5.9
+export ORDERER_VERSION=2.5.10
 
 export CA_IMAGE=hyperledger/fabric-ca
-export CA_VERSION=1.5.12
+export CA_VERSION=1.5.13
 ```
 
 
@@ -236,13 +236,13 @@ export CA_VERSION=1.5.12
 
 ```bash
 export PEER_IMAGE=hyperledger/fabric-peer
-export PEER_VERSION=2.5.9
+export PEER_VERSION=2.5.10
 
 export ORDERER_IMAGE=hyperledger/fabric-orderer
-export ORDERER_VERSION=2.5.9
+export ORDERER_VERSION=2.5.10
 
 export CA_IMAGE=hyperledger/fabric-ca             
-export CA_VERSION=1.5.12
+export CA_VERSION=1.5.13
 
 ```
 
@@ -541,7 +541,6 @@ kubectl hlf identity create --name org2-admin --namespace default \
 ```bash
 kubectl create secret generic wallet --namespace=default \
         --from-file=org1msp.yaml=$PWD/org1msp.yaml \
-        --from-file=org2msp.yaml=$PWD/org2msp.yaml \
         --from-file=orderermsp.yaml=$PWD/orderermsp.yaml \
         --from-file=orderermspsign.yaml=$PWD/orderermspsign.yaml
 
@@ -567,9 +566,9 @@ kubectl apply -f - <<EOF
 apiVersion: hlf.kungfusoftware.es/v1alpha1
 kind: FabricMainChannel
 metadata:
-  name: demo5
+  name: demo
 spec:
-  name: demo5
+  name: demo
   adminOrdererOrganizations:
     - mspID: OrdererMSP
   adminPeerOrganizations:

@@ -1,9 +1,8 @@
-FROM registry.access.redhat.com/ubi8/ubi-minimal:8.3
-
+FROM alpine:3.14
 
 RUN \
-    microdnf update --nodocs && \
-    microdnf install curl ca-certificates shadow-utils --nodocs
+    apk update && \
+    apk add --no-cache curl ca-certificates shadow
 
 COPY CREDITS /licenses/CREDITS
 COPY LICENSE /licenses/LICENSE
