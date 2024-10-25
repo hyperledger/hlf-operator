@@ -21,7 +21,6 @@ import (
 	"github.com/hyperledger/fabric-config/protolator"
 	"github.com/hyperledger/fabric-protos-go/common"
 	cb "github.com/hyperledger/fabric-protos-go/common"
-	mspa "github.com/hyperledger/fabric-protos-go/msp"
 	sb "github.com/hyperledger/fabric-protos-go/orderer/smartbft"
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/resmgmt"
 	fab2 "github.com/hyperledger/fabric-sdk-go/pkg/common/providers/fab"
@@ -722,7 +721,7 @@ func (r *FabricMainChannelReconciler) updateCRStatusOrFailReconcile(ctx context.
 	}
 	if p.Status.Status == hlfv1alpha1.FailedStatus {
 		return reconcile.Result{
-			RequeueAfter: 1 * time.Minute,
+			RequeueAfter: 5 * time.Minute,
 		}, nil
 	}
 	return reconcile.Result{}, nil
@@ -1383,10 +1382,7 @@ func updateOrdererChannelConfigTx(currentConfigTX configtx.ConfigTx, newConfigTx
 		return errors.Wrapf(err, "failed to get application configuration")
 	}
 	log.Infof("New config tx: %v", newConfigTx.Orderer)
-	err = currentConfigTX.Orderer().SetConfiguration(newConfigTx.Orderer)
-	if err != nil {
-		return errors.Wrapf(err, "failed to set orderer configuration")
-	}
+
 	currentConfig, err := currentConfigTX.Orderer().Configuration()
 	if err != nil {
 		return errors.Wrapf(err, "failed to get current orderer configuration")
@@ -1433,6 +1429,10 @@ func updateOrdererChannelConfigTx(currentConfigTX configtx.ConfigTx, newConfigTx
 			}
 		}
 	} else if newConfigTx.Orderer.OrdererType == orderer.ConsensusTypeBFT {
+		err = currentConfigTX.Orderer().SetConfiguration(newConfigTx.Orderer)
+		if err != nil {
+			return errors.Wrapf(err, "failed to set orderer configuration")
+		}
 		var consenterMapping []*cb.Consenter
 		for _, consenter := range newConfigTx.Orderer.ConsenterMapping {
 			consenterMapping = append(consenterMapping, &cb.Consenter{
@@ -1449,31 +1449,14 @@ func updateOrdererChannelConfigTx(currentConfigTX configtx.ConfigTx, newConfigTx
 		if err != nil {
 			return errors.Wrapf(err, "failed to set consenter mapping")
 		}
-
-		var identities []*mspa.MSPPrincipal
-		var pols []*cb.SignaturePolicy
-		for i, consenter := range consenterMapping {
-			if consenter == nil {
-				return fmt.Errorf("consenter %d in the mapping is empty", i)
-			}
-			pols = append(pols, &cb.SignaturePolicy{
-				Type: &cb.SignaturePolicy_SignedBy{
-					SignedBy: int32(i),
-				},
-			})
-			identities = append(identities, &mspa.MSPPrincipal{
-				PrincipalClassification: mspa.MSPPrincipal_IDENTITY,
-				Principal:               protoutil.MarshalOrPanic(&mspa.SerializedIdentity{Mspid: consenter.MspId, IdBytes: consenter.Identity}),
-			})
-		}
-	}
-	err = currentConfigTX.Orderer().SetConfiguration(newConfigTx.Orderer)
-	if err != nil {
-		return errors.Wrapf(err, "failed to set orderer configuration")
 	}
 
 	// update
 	if ord.OrdererType == "BFT" {
+		err = currentConfigTX.Orderer().SetConfiguration(newConfigTx.Orderer)
+		if err != nil {
+			return errors.Wrapf(err, "failed to set orderer configuration")
+		}
 		log.Infof("updateOrdererChannelConfigTx: Orderer type: %s", ord.OrdererType)
 		// update policies but blockValidation
 		err = currentConfigTX.Orderer().SetPolicy("Admins", newConfigTx.Orderer.Policies["Admins"])

@@ -1,14 +1,15 @@
 package chaincode
 
 import (
+	"io"
+	"io/ioutil"
+	"strconv"
+
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/resmgmt"
 	"github.com/hyperledger/fabric-sdk-go/pkg/core/config"
 	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"io"
-	"io/ioutil"
-	"strconv"
 )
 
 type getLatestInfoCmd struct {
@@ -46,9 +47,14 @@ func (c *getLatestInfoCmd) run(out io.Writer, stdErr io.Writer) error {
 	if err != nil {
 		return err
 	}
+	resmgmtOptions := []resmgmt.RequestOption{}
+	if c.peer != "" {
+		resmgmtOptions = append(resmgmtOptions, resmgmt.WithTargetEndpoints(c.peer))
+	}
 	committedCCs, err := resClient.LifecycleQueryCommittedCC(
 		c.channelName,
 		resmgmt.LifecycleQueryCommittedCCRequest{Name: c.name},
+		resmgmtOptions...,
 	)
 	if err != nil {
 		return err

@@ -401,7 +401,7 @@ func (r *FabricFollowerChannelReconciler) updateCRStatusOrFailReconcile(ctx cont
 	}
 	if p.Status.Status == hlfv1alpha1.FailedStatus {
 		return reconcile.Result{
-			RequeueAfter: 1 * time.Minute,
+			RequeueAfter: 5 * time.Minute,
 		}, nil
 	}
 	return reconcile.Result{
