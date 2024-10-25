@@ -15,4 +15,4 @@ The CRDs for the orderer, peer, and certificate authority have an optional param
     scrapeTimeout: 10s
 ```
 
-There are some dashboards available in the Github repository for Grafana available at https://github.com/hyperledger/bevel-operator-fabric/dashboards.
+There are some dashboards available in the Github repository for Grafana available at https://github.com/hyperledger-bevel/bevel-operator-fabric/dashboards.

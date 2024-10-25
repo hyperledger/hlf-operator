@@ -64,7 +64,7 @@ const config: Config = {
           position: "left",
         },
         {
-          href: "https://github.com/hyperledger/bevel-operator-fabric",
+          href: "https://github.com/hyperledger-bevel/bevel-operator-fabric",
           label: "GitHub",
           position: "right",
         },
@@ -95,7 +95,7 @@ const config: Config = {
             },
             {
               label: "Github Issues",
-              href: "https://github.com/hyperledger/bevel-operator-fabric/issues",
+              href: "https://github.com/hyperledger-bevel/bevel-operator-fabric/issues",
             },
           ],
         },
@@ -104,7 +104,7 @@ const config: Config = {
           items: [
             {
               label: "GitHub",
-              href: "https://github.com/hyperledger/bevel-operator-fabric",
+              href: "https://github.com/hyperledger-bevel/bevel-operator-fabric",
             },
           ],
         },
@@ -123,13 +123,13 @@ const config: Config = {
           sidebarPath: require.resolve("./sidebars.js"),
           // Please change this to your repo.
           editUrl:
-            "https://github.com/hyperledger/bevel-operator-fabric/edit/master/website/",
+            "https://github.com/hyperledger-bevel/bevel-operator-fabric/edit/master/website/",
         },
         blog: {
           showReadingTime: true,
           // Please change this to your repo.
           editUrl:
-            "https://github.com/hyperledger/bevel-operator-fabric/edit/master/website/blog/",
+            "https://github.com/hyperledger-bevel/bevel-operator-fabric/edit/master/website/blog/",
         },
         theme: {
           customCss: require.resolve("./src/css/custom.css"),
