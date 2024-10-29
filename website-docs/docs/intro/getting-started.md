@@ -3,6 +3,68 @@ id: getting-started
 title: Getting started
 ---
 
+# Hyperledger Fabric Operator
+
+## Features
+
+- [x] Create certificates authorities (CA)
+- [x] Create peers
+- [x] Create ordering services
+- [x] Create resources without manual provisioning of cryptographic material
+- [x] Domain routing with SNI using Istio
+- [x] Run chaincode as external chaincode in Kubernetes
+- [x] Support Hyperledger Fabric 2.3+
+- [x] Managed genesis for Ordering services
+- [x] E2E testing including the execution of chaincodes in KIND
+- [x] Renewal of certificates
+
+## Stay Up-to-Date
+
+`hlf-operator` is currently in stable. Watch **releases** of this repository to be notified for future updates:
+
+![hlf-operator-star-github](https://user-images.githubusercontent.com/6862893/123808402-022aa800-d8f1-11eb-8df4-8a9552f126a2.gif)
+
+## Discord
+
+For discussions and questions, please join the Hyperledger Foundation Discord:
+
+[https://discord.com/invite/hyperledger](https://discord.com/invite/hyperledger)
+
+The channel is located under `BEVEL`, named [`bevel-operator-fabric`](https://discordapp.com/channels/905194001349627914/967823782712594442).
+
+## Hyperledger Meetups
+
+You can watch this video to see how to use it to deploy your own network:
+
+[![Deploying a Network Using SmartBFT in Hyperledger Fabric 3.0](http://img.youtube.com/vi/4taLwa_pl9U/0.jpg)](https://www.youtube.com/watch?v=4taLwa_pl9U "Deploying a Network Using SmartBFT in Hyperledger Fabric 3.0")
+[![Deploying a Network Using SmartBFT in Hyperledger Fabric 3.0](http://img.youtube.com/vi/vM_UzryCOqs/0.jpg)](https://www.youtube.com/watch?v=vM_UzryCOqs "Hyperledger Fabric on Kubernetes")
+[![Hyperledger Fabric on Kubernetes](http://img.youtube.com/vi/namKDeJf5QI/0.jpg)](http://www.youtube.com/watch?v=namKDeJf5QI "Hyperledger Fabric on Kubernetes")
+
+
+## Tutorial Videos
+
+Step-by-step video tutorials to setup hlf-operator in Kubernetes
+
+[![Hyperledger Fabric on Kubernetes](https://img.youtube.com/vi/e04TcJHUI5M/0.jpg)](https://www.youtube.com/playlist?list=PLuAZTZDgj0csRQuNMY8wbYqOCpzggAuMo "Hyperledger Fabric on Kubernetes")
+
+This workshop provides an in-depth hands on discussion and demonstration of using Bevel and the new Bevel-Operator-Fabric to deploy Hyperledger Fabric on Kubernetes.
+
+
+## Hyperledger Workshops
+
+This workshop provides an in-depth, hands-on discussion and demonstration of using Bevel and the new Bevel-Operator-Fabric to deploy Hyperledger Fabric on Kubernetes.
+
+[![How to Deploy Hyperledger Fabric on Kubernetes with Hyperledger Bevel](https://img.youtube.com/vi/YUC12ahY5_k/0.jpg)](https://www.youtube.com/live/YUC12ahY5_k?feature=share&t=4430)
+
+## Sponsor
+
+|                                                                               |                                                                                                                                                                                                                                                                                                                     |
+|-------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ![galagames logo](https://avatars.githubusercontent.com/u/135145372?s=200&v=4) | Gala Games is a blockchain gaming platform that empowers players to earn cryptocurrencies and NFTs through gameplay. Founded in 2018 by Eric Schiermeyer, co-founder of Zynga, it aims to create a new type of gaming experience. The platform offers limited edition NFTs and allows players to earn Gala tokens |
+| ![kfs logo](https://avatars.githubusercontent.com/u/74511895?s=200&v=4)       | If you want to design and deploy a secure Blockchain network based on the latest version of Hyperledger Fabric, feel free to contact dviejo@kungfusoftware.es or visit [https://kfs.es/blockchain](https://kfs.es/blockchain)                                                                                       |
+
+## Getting started
+
 # Tutorial
 
 Resources:
@@ -18,12 +80,21 @@ Ensure you have these ports available before creating the cluster:
 
 If these ports are not available this tutorial will not work.
 
+### Using K3D
+
+```bash
+k3d cluster create  -p "80:30949@agent:0" -p "443:30950@agent:0" --agents 2 k8s-hlf
+```
+
+### Using KinD
+
 ```bash
 cat << EOF > kind-config.yaml
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
 - role: control-plane
+  image: kindest/node:v1.30.2
   extraPortMappings:
   - containerPort: 30949
     hostPort: 80
@@ -47,7 +118,7 @@ To install helm: [https://helm.sh/docs/intro/install/](https://helm.sh/docs/intr
 ```bash
 helm repo add kfs https://kfsoftware.github.io/hlf-helm-charts --force-update
 
-helm install hlf-operator --version=1.8.0 kfs/hlf-operator
+helm install hlf-operator --version=1.10.0 -- kfs/hlf-operator
 ```
 
 
@@ -74,6 +145,9 @@ Install Istio on the Kubernetes cluster:
 ```bash
 
 kubectl create namespace istio-system
+
+export ISTIO_PATH=$(echo $PWD/istio-*/bin)
+export PATH="$PATH:$ISTIO_PATH"
 
 istioctl operator init
 
@@ -148,31 +222,35 @@ EOF
 
 ```bash
 export PEER_IMAGE=hyperledger/fabric-peer
-export PEER_VERSION=2.4.6
+export PEER_VERSION=3.0.0
 
 export ORDERER_IMAGE=hyperledger/fabric-orderer
-export ORDERER_VERSION=2.4.6
+export ORDERER_VERSION=3.0.0
 
+export CA_IMAGE=hyperledger/fabric-ca
+export CA_VERSION=1.5.13
 ```
 
 
 ### Environment Variables for ARM (Mac M1)
 
 ```bash
-export PEER_IMAGE=bswamina/fabric-peer
-export PEER_VERSION=2.4.6
+export PEER_IMAGE=hyperledger/fabric-peer
+export PEER_VERSION=3.0.0
 
-export ORDERER_IMAGE=bswamina/fabric-orderer
-export ORDERER_VERSION=2.4.6
+export ORDERER_IMAGE=hyperledger/fabric-orderer
+export ORDERER_VERSION=3.0.0
+
+export CA_IMAGE=hyperledger/fabric-ca             
+export CA_VERSION=1.5.13
 
 ```
 
 
 
-### Configurar DNS interno
+### Configure Internal DNS
 
 ```bash
-CLUSTER_IP=$(kubectl -n istio-system get svc istio-ingressgateway -o json | jq -r .spec.clusterIP)
 kubectl apply -f - <<EOF
 kind: ConfigMap
 apiVersion: v1
@@ -186,9 +264,8 @@ data:
         health {
            lameduck 5s
         }
-        rewrite name regex (.*)\.localho\.st host.ingress.internal
+        rewrite name regex (.*)\.localho\.st istio-ingressgateway.istio-system.svc.cluster.local
         hosts {
-          ${CLUSTER_IP} host.ingress.internal
           fallthrough
         }
         ready
@@ -209,11 +286,19 @@ data:
 EOF
 ```
 
+### Configure Storage Class
+Set storage class depending on the Kubernetes cluster you are using:
+```bash
+# for Kind
+export SC_NAME=standard
+# for K3D
+export SC_NAME=local-path
+```
+
 ### Deploy a certificate authority
 
 ```bash
-
-kubectl hlf ca create --storage-class=standard --capacity=1Gi --name=org1-ca \
+kubectl hlf ca create  --image=$CA_IMAGE --version=$CA_VERSION --storage-class=$SC_NAME --capacity=1Gi --name=org1-ca \
     --enroll-id=enroll --enroll-pw=enrollpw --hosts=org1-ca.localho.st --istio-port=443
 
 kubectl wait --timeout=180s --for=condition=Running fabriccas.hlf.kungfusoftware.es --all
@@ -237,14 +322,10 @@ kubectl hlf ca register --name=org1-ca --user=peer --secret=peerpw --type=peer \
 ### Deploy a peer
 
 ```bash
-kubectl hlf peer create --statedb=couchdb --image=$PEER_IMAGE --version=$PEER_VERSION --storage-class=standard --enroll-id=peer --mspid=Org1MSP \
+kubectl hlf peer create --statedb=leveldb --image=$PEER_IMAGE --version=$PEER_VERSION --storage-class=$SC_NAME --enroll-id=peer --mspid=Org1MSP \
         --enroll-pw=peerpw --capacity=5Gi --name=org1-peer0 --ca-name=org1-ca.default \
         --hosts=peer0-org1.localho.st --istio-port=443
 
-
-kubectl hlf peer create --statedb=couchdb --image=$PEER_IMAGE --version=$PEER_VERSION --storage-class=standard --enroll-id=peer --mspid=Org1MSP \
-        --enroll-pw=peerpw --capacity=5Gi --name=org1-peer1 --ca-name=org1-ca.default \
-        --hosts=peer1-org1.localho.st --istio-port=443
 
 kubectl wait --timeout=180s --for=condition=Running fabricpeers.hlf.kungfusoftware.es --all
 ```
@@ -252,7 +333,7 @@ kubectl wait --timeout=180s --for=condition=Running fabricpeers.hlf.kungfusoftwa
 Check that the peer is deployed and works:
 
 ```bash
-curl -vik https://peer0-org1.localho.st:443
+openssl s_client -connect peer0-org1.localho.st:443
 ```
 
 ## Deploy an `Orderer` organization
@@ -267,7 +348,7 @@ To deploy an `Orderer` organization we have to:
 
 ```bash
 
-kubectl hlf ca create --storage-class=standard --capacity=1Gi --name=ord-ca \
+kubectl hlf ca create  --image=$CA_IMAGE --version=$CA_VERSION --storage-class=$SC_NAME --capacity=1Gi --name=ord-ca \
     --enroll-id=enroll --enroll-pw=enrollpw --hosts=ord-ca.localho.st --istio-port=443
 
 kubectl wait --timeout=180s --for=condition=Running fabriccas.hlf.kungfusoftware.es --all
@@ -290,10 +371,31 @@ kubectl hlf ca register --name=ord-ca --user=orderer --secret=ordererpw \
 ### Deploy orderer
 
 ```bash
+
 kubectl hlf ordnode create --image=$ORDERER_IMAGE --version=$ORDERER_VERSION \
-    --storage-class=standard --enroll-id=orderer --mspid=OrdererMSP \
+    --storage-class=$SC_NAME --enroll-id=orderer --mspid=OrdererMSP \
     --enroll-pw=ordererpw --capacity=2Gi --name=ord-node1 --ca-name=ord-ca.default \
-    --hosts=orderer0-ord.localho.st --istio-port=443
+    --hosts=orderer0-ord.localho.st --admin-hosts=admin-orderer0-ord.localho.st --istio-port=443
+
+
+kubectl hlf ordnode create --image=$ORDERER_IMAGE --version=$ORDERER_VERSION \
+    --storage-class=$SC_NAME --enroll-id=orderer --mspid=OrdererMSP \
+    --enroll-pw=ordererpw --capacity=2Gi --name=ord-node2 --ca-name=ord-ca.default \
+    --hosts=orderer1-ord.localho.st --admin-hosts=admin-orderer1-ord.localho.st --istio-port=443
+
+
+kubectl hlf ordnode create --image=$ORDERER_IMAGE --version=$ORDERER_VERSION \
+    --storage-class=$SC_NAME --enroll-id=orderer --mspid=OrdererMSP \
+    --enroll-pw=ordererpw --capacity=2Gi --name=ord-node3 --ca-name=ord-ca.default \
+    --hosts=orderer2-ord.localho.st --admin-hosts=admin-orderer2-ord.localho.st --istio-port=443
+
+
+kubectl hlf ordnode create --image=$ORDERER_IMAGE --version=$ORDERER_VERSION \
+    --storage-class=$SC_NAME --enroll-id=orderer --mspid=OrdererMSP \
+    --enroll-pw=ordererpw --capacity=2Gi --name=ord-node4 --ca-name=ord-ca.default \
+    --hosts=orderer3-ord.localho.st --admin-hosts=admin-orderer3-ord.localho.st --istio-port=443
+
+
 
 kubectl wait --timeout=180s --for=condition=Running fabricorderernodes.hlf.kungfusoftware.es --all
 ```
@@ -305,44 +407,12 @@ kubectl get pods
 ```
 
 ```bash
-curl -vik https://orderer0-ord.localho.st:443
+openssl s_client -connect orderer0-ord.localho.st:443
+openssl s_client -connect orderer1-ord.localho.st:443
+openssl s_client -connect orderer2-ord.localho.st:443
+openssl s_client -connect orderer3-ord.localho.st:443
 ```
 
-
-## Prepare connection string to interact with orderer
-
-To prepare the connection string, we have to:
-
-- Get the connection string without users
-- Register a user in the certification authority for signature
-- Get the certificates using the user created above
-- Attach the user to the connection string
-
-1. Get the connection string without users
-
-```bash
-kubectl hlf inspect --output ordservice.yaml -o OrdererMSP
-```
-
-2. Register a user in the TLS certification authority
-
-```bash
-kubectl hlf ca register --name=ord-ca --user=admin --secret=adminpw \
-    --type=admin --enroll-id enroll --enroll-secret=enrollpw --mspid=OrdererMSP
-```
-
-3. Get the certificates using the certificate
-
-```bash
-kubectl hlf ca enroll --name=ord-ca --user=admin --secret=adminpw --mspid OrdererMSP \
-        --ca-name ca  --output admin-ordservice.yaml
-```
-
-4. Attach the user to the connection string
-
-```
-kubectl hlf utils adduser --userPath=admin-ordservice.yaml --config=ordservice.yaml --username=admin --mspid=OrdererMSP
-```
 
 ## Create channel
 
@@ -360,6 +430,24 @@ kubectl hlf ca register --name=ord-ca --user=admin --secret=adminpw \
 kubectl hlf ca enroll --name=ord-ca --namespace=default \
     --user=admin --secret=adminpw --mspid OrdererMSP \
     --ca-name tlsca  --output orderermsp.yaml
+    
+kubectl hlf ca enroll --name=ord-ca --namespace=default \
+    --user=admin --secret=adminpw --mspid OrdererMSP \
+    --ca-name ca  --output orderermspsign.yaml
+```
+
+### Register and enrolling Org1MSP Orderer identity
+
+```bash
+# register
+kubectl hlf ca register --name=org1-ca --user=admin --secret=adminpw \
+    --type=admin --enroll-id enroll --enroll-secret=enrollpw --mspid=Org1MSP
+
+# enroll
+
+kubectl hlf ca enroll --name=org1-ca --namespace=default \
+    --user=admin --secret=adminpw --mspid Org1MSP \
+    --ca-name tlsca  --output org1msp-tlsca.yaml
 ```
 
 
@@ -375,15 +463,22 @@ kubectl hlf ca enroll --name=org1-ca --namespace=default \
     --user=admin --secret=adminpw --mspid Org1MSP \
     --ca-name ca  --output org1msp.yaml
 
+# enroll
+kubectl hlf identity create --name org1-admin --namespace default \
+    --ca-name org1-ca --ca-namespace default \
+    --ca ca --mspid Org1MSP --enroll-id admin --enroll-secret adminpw
+
+
 ```
 
 ### Create the secret
 
 ```bash
-
 kubectl create secret generic wallet --namespace=default \
         --from-file=org1msp.yaml=$PWD/org1msp.yaml \
-        --from-file=orderermsp.yaml=$PWD/orderermsp.yaml
+        --from-file=orderermsp.yaml=$PWD/orderermsp.yaml \
+        --from-file=orderermspsign.yaml=$PWD/orderermspsign.yaml
+
 ```
 
 ### Create main channel
@@ -391,9 +486,13 @@ kubectl create secret generic wallet --namespace=default \
 ```bash
 export PEER_ORG_SIGN_CERT=$(kubectl get fabriccas org1-ca -o=jsonpath='{.status.ca_cert}')
 export PEER_ORG_TLS_CERT=$(kubectl get fabriccas org1-ca -o=jsonpath='{.status.tlsca_cert}')
+
 export IDENT_8=$(printf "%8s" "")
 export ORDERER_TLS_CERT=$(kubectl get fabriccas ord-ca -o=jsonpath='{.status.tlsca_cert}' | sed -e "s/^/${IDENT_8}/" )
 export ORDERER0_TLS_CERT=$(kubectl get fabricorderernodes ord-node1 -o=jsonpath='{.status.tlsCert}' | sed -e "s/^/${IDENT_8}/" )
+export ORDERER1_TLS_CERT=$(kubectl get fabricorderernodes ord-node2 -o=jsonpath='{.status.tlsCert}' | sed -e "s/^/${IDENT_8}/" )
+export ORDERER2_TLS_CERT=$(kubectl get fabricorderernodes ord-node3 -o=jsonpath='{.status.tlsCert}' | sed -e "s/^/${IDENT_8}/" )
+export ORDERER3_TLS_CERT=$(kubectl get fabricorderernodes ord-node4 -o=jsonpath='{.status.tlsCert}' | sed -e "s/^/${IDENT_8}/" )
 
 kubectl apply -f - <<EOF
 apiVersion: hlf.kungfusoftware.es/v1alpha1
@@ -411,6 +510,7 @@ spec:
       acls: null
       capabilities:
         - V2_0
+        - V2_5
       policies: null
     capabilities:
       - V2_0
@@ -434,37 +534,69 @@ spec:
       state: STATE_NORMAL
     policies: null
   externalOrdererOrganizations: []
+  externalPeerOrganizations: []
   peerOrganizations:
     - mspID: Org1MSP
       caName: "org1-ca"
       caNamespace: "default"
+
   identities:
     OrdererMSP:
       secretKey: orderermsp.yaml
+      secretName: wallet
+      secretNamespace: default
+    OrdererMSP-tls:
+      secretKey: orderermsp.yaml
+      secretName: wallet
+      secretNamespace: default
+    OrdererMSP-sign:
+      secretKey: orderermspsign.yaml
       secretName: wallet
       secretNamespace: default
     Org1MSP:
       secretKey: org1msp.yaml
       secretName: wallet
       secretNamespace: default
-  externalPeerOrganizations: []
+
   ordererOrganizations:
     - caName: "ord-ca"
       caNamespace: "default"
       externalOrderersToJoin:
-        - host: ord-node1
+        - host: ord-node1.default
+          port: 7053
+        - host: ord-node2.default
+          port: 7053
+        - host: ord-node3.default
+          port: 7053
+        - host: ord-node4.default
           port: 7053
       mspID: OrdererMSP
       ordererEndpoints:
-        - ord-node1:7050
+        - orderer0-ord.localho.st:443
+        - orderer1-ord.localho.st:443
+        - orderer2-ord.localho.st:443
+        - orderer3-ord.localho.st:443
       orderersToJoin: []
   orderers:
-    - host: ord-node1
-      port: 7050
+    - host: orderer0-ord.localho.st
+      port: 443
       tlsCert: |-
 ${ORDERER0_TLS_CERT}
+    - host: orderer1-ord.localho.st
+      port: 443
+      tlsCert: |-
+${ORDERER1_TLS_CERT}
+    - host: orderer2-ord.localho.st
+      port: 443
+      tlsCert: |-
+${ORDERER2_TLS_CERT}
+    - host: orderer3-ord.localho.st
+      port: 443
+      tlsCert: |-
+${ORDERER3_TLS_CERT}
 
 EOF
+
 ```
 
 ## Join peer to the channel
@@ -481,8 +613,8 @@ metadata:
   name: demo-org1msp
 spec:
   anchorPeers:
-    - host: org1-peer0.default
-      port: 7051
+    - host: peer0-org1.localho.st
+      port: 443
   hlfIdentity:
     secretKey: org1msp.yaml
     secretName: wallet
@@ -497,14 +629,10 @@ ${ORDERER0_TLS_CERT}
   peersToJoin:
     - name: org1-peer0
       namespace: default
-    - name: org1-peer1
-      namespace: default
 EOF
 
 
 ```
-
-
 
 ## Install a chaincode
 
@@ -607,30 +735,32 @@ export VERSION="1.0"
 kubectl hlf chaincode approveformyorg --config=org1.yaml --user=admin --peer=org1-peer0.default \
     --package-id=$PACKAGE_ID \
     --version "$VERSION" --sequence "$SEQUENCE" --name=asset \
-    --policy="OR('Org1MSP.member')" --channel=demo
+    --policy="OR('Org1MSP.member')" --channel=testbft02
 ```
 
 ## Commit chaincode
 ```bash
 kubectl hlf chaincode commit --config=org1.yaml --user=admin --mspid=Org1MSP \
     --version "$VERSION" --sequence "$SEQUENCE" --name=asset \
-    --policy="OR('Org1MSP.member')" --channel=demo
+    --policy="OR('Org1MSP.member')" --channel=testbft02
 ```
 
 
 ## Invoke a transaction on the channel
+
 ```bash
 kubectl hlf chaincode invoke --config=org1.yaml \
     --user=admin --peer=org1-peer0.default \
-    --chaincode=asset --channel=demo \
+    --chaincode=asset --channel=testbft02 \
     --fcn=initLedger -a '[]'
 ```
 
 ## Query assets in the channel
+
 ```bash
 kubectl hlf chaincode query --config=org1.yaml \
     --user=admin --peer=org1-peer0.default \
-    --chaincode=asset --channel=demo \
+    --chaincode=asset --channel=testbft02 \
     --fcn=GetAllAssets -a '[]'
 ```
 
@@ -645,6 +775,7 @@ At this point, you should have:
 
 If something went wrong or didn't work, please, open an issue.
 
+
 ## Cleanup the environment
 
 ```bash
@@ -652,6 +783,8 @@ kubectl delete fabricorderernodes.hlf.kungfusoftware.es --all-namespaces --all
 kubectl delete fabricpeers.hlf.kungfusoftware.es --all-namespaces --all
 kubectl delete fabriccas.hlf.kungfusoftware.es --all-namespaces --all
 kubectl delete fabricchaincode.hlf.kungfusoftware.es --all-namespaces --all
+kubectl delete fabricmainchannels --all-namespaces --all
+kubectl delete fabricfollowerchannels --all-namespaces --all
 ```
 
 ## Troubleshooting

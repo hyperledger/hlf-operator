@@ -13,7 +13,7 @@ import type { SidebarsConfig } from '@docusaurus/plugin-content-docs';
 const sidebars: SidebarsConfig = {
 	// By default, Docusaurus generates a sidebar from the docs folder structure
 	mainSidebar: {
-		Operator: ["intro/intro", "intro/getting-started"],
+		Operator: ["intro/intro", "intro/getting-started", "intro/getting-started-3-0"],
 		"Operator Guide": [
 			"operator-guide/state-db",
 			"operator-guide/monitoring",
