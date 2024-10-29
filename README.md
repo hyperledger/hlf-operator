@@ -336,50 +336,6 @@ Check that the peer is deployed and works:
 openssl s_client -connect peer0-org1.localho.st:443
 ```
 
-
-## Deploy Org2
-
-### Deploy a certificate authority
-
-```bash
-kubectl hlf ca create  --image=$CA_IMAGE --version=$CA_VERSION --storage-class=$SC_NAME --capacity=1Gi --name=org2-ca \
-    --enroll-id=enroll --enroll-pw=enrollpw --hosts=org2-ca.localho.st --istio-port=443
-
-kubectl wait --timeout=180s --for=condition=Running fabriccas.hlf.kungfusoftware.es --all
-```
-
-Check that the certification authority is deployed and works:
-
-```bash
-curl -k https://org2-ca.localho.st:443/cainfo
-```
-
-Register a user in the certification authority of the peer organization (Org2MSP)
-
-```bash
-# register user in CA for peers
-kubectl hlf ca register --name=org2-ca --user=peer --secret=peerpw --type=peer \
- --enroll-id enroll --enroll-secret=enrollpw --mspid Org2MSP
-
-```
-
-### Deploy a peer
-
-```bash
-kubectl hlf peer create --statedb=leveldb --image=$PEER_IMAGE --version=$PEER_VERSION --storage-class=$SC_NAME --enroll-id=peer --mspid=Org2MSP \
-        --enroll-pw=peerpw --capacity=5Gi --name=org2-peer0 --ca-name=org2-ca.default \
-        --hosts=peer0-org2.localho.st --istio-port=443
-
-
-kubectl wait --timeout=180s --for=condition=Running fabricpeers.hlf.kungfusoftware.es --all
-```
-
-Check that the peer is deployed and works:
-
-```bash
-openssl s_client -connect peer0-org2.localho.st:443
-```
-
 ## Deploy an `Orderer` organization
 
 To deploy an `Orderer` organization we have to:
@@ -515,27 +471,6 @@ kubectl hlf identity create --name org1-admin --namespace default \
 
 ```
 
-
-### Register and enrolling Org2MSP identity
-
-```bash
-# register
-kubectl hlf ca register --name=org2-ca --namespace=default --user=admin --secret=adminpw \
-    --type=admin --enroll-id enroll --enroll-secret=enrollpw --mspid=Org2MSP
-
-# enroll
-kubectl hlf ca enroll --name=org2-ca --namespace=default \
-    --user=admin --secret=adminpw --mspid Org2MSP \
-    --ca-name ca  --output org2msp.yaml
-
-# enroll
-kubectl hlf identity create --name org2-admin --namespace default \
-    --ca-name org2-ca --ca-namespace default \
-    --ca ca --mspid Org2MSP --enroll-id admin --enroll-secret adminpw
-
-
-```
-
 ### Create the secret
 
 ```bash
@@ -551,9 +486,6 @@ kubectl create secret generic wallet --namespace=default \
 ```bash
 export PEER_ORG_SIGN_CERT=$(kubectl get fabriccas org1-ca -o=jsonpath='{.status.ca_cert}')
 export PEER_ORG_TLS_CERT=$(kubectl get fabriccas org1-ca -o=jsonpath='{.status.tlsca_cert}')
-
-export PEER_ORG2_SIGN_CERT=$(kubectl get fabriccas org2-ca -o=jsonpath='{.status.ca_cert}')
-export PEER_ORG2_TLS_CERT=$(kubectl get fabriccas org2-ca -o=jsonpath='{.status.tlsca_cert}')
 
 export IDENT_8=$(printf "%8s" "")
 export ORDERER_TLS_CERT=$(kubectl get fabriccas ord-ca -o=jsonpath='{.status.tlsca_cert}' | sed -e "s/^/${IDENT_8}/" )
@@ -607,9 +539,7 @@ spec:
     - mspID: Org1MSP
       caName: "org1-ca"
       caNamespace: "default"
-    - mspID: Org2MSP
-      caName: "org2-ca"
-      caNamespace: "default"
+
   identities:
     OrdererMSP:
       secretKey: orderermsp.yaml
@@ -625,10 +555,6 @@ spec:
       secretNamespace: default
     Org1MSP:
       secretKey: org1msp.yaml
-      secretName: wallet
-      secretNamespace: default
-    Org2MSP:
-      secretKey: org2msp.yaml
       secretName: wallet
       secretNamespace: default
 
@@ -707,44 +633,6 @@ EOF
 
 
 ```
-
-
-## Join peer to the channel
-
-```bash
-
-export IDENT_8=$(printf "%8s" "")
-export ORDERER0_TLS_CERT=$(kubectl get fabricorderernodes ord-node1 -o=jsonpath='{.status.tlsCert}' | sed -e "s/^/${IDENT_8}/" )
-
-kubectl apply -f - <<EOF
-apiVersion: hlf.kungfusoftware.es/v1alpha1
-kind: FabricFollowerChannel
-metadata:
-  name: demo-org2msp
-spec:
-  anchorPeers:
-    - host: peer0-org2.localho.st
-      port: 443
-  hlfIdentity:
-    secretKey: org2msp.yaml
-    secretName: wallet
-    secretNamespace: default
-  mspId: Org2MSP
-  name: demo
-  externalPeersToJoin: []
-  orderers:
-    - certificate: |
-${ORDERER0_TLS_CERT}
-      url: grpcs://ord-node1.default:7050
-  peersToJoin:
-    - name: org2-peer0
-      namespace: default
-EOF
-
-
-```
-
-
 
 ## Install a chaincode
 
@@ -859,6 +747,7 @@ kubectl hlf chaincode commit --config=org1.yaml --user=admin --mspid=Org1MSP \
 
 
 ## Invoke a transaction on the channel
+
 ```bash
 kubectl hlf chaincode invoke --config=org1.yaml \
     --user=admin --peer=org1-peer0.default \
@@ -867,6 +756,7 @@ kubectl hlf chaincode invoke --config=org1.yaml \
 ```
 
 ## Query assets in the channel
+
 ```bash
 kubectl hlf chaincode query --config=org1.yaml \
     --user=admin --peer=org1-peer0.default \
@@ -885,47 +775,6 @@ At this point, you should have:
 
 If something went wrong or didn't work, please, open an issue.
 
-
-
-### Prepare connection string for a peer
-
-To prepare the connection string, we have to create a CRD of type `FabricNetworkConfig` with the following command:
-
-```bash
-kubectl apply -f - <<EOF
-apiVersion: hlf.kungfusoftware.es/v1alpha1
-kind: FabricNetworkConfig
-metadata:
-  name: nc
-  namespace: default
-spec:
-  channels:
-    - testbft02
-  identities:
-    - name: org1-admin
-      namespace: default
-  internal: false
-  namespaces: []
-  organization: ''
-  organizations:
-    - Org1MSP
-    - OrdererMSP
-  secretName: nc-networkconfig
-EOF
-
-```
-## Launch the explorer
-
-```bash
-export API_HOST=operator-api.localho.st
-export HLF_SECRET_NAME="nc-networkconfig"
-export HLF_MSPID="Org1MSP"
-export HLF_SECRET_KEY="config.yaml" # e.g. networkConfig.yaml
-export HLF_USER="org1-admin-default"
-kubectl hlf operatorapi create --name=operator-api --namespace=default --version="v0.0.17-beta9" --hosts=$API_HOST --ingress-class-name=istio \
-          --hlf-mspid="${HLF_MSPID}" --hlf-secret="${HLF_SECRET_NAME}" --hlf-secret-key="${HLF_SECRET_KEY}" \
-          --hlf-user="${HLF_USER}"
-```
 
 ## Cleanup the environment
 
