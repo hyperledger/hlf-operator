@@ -47,3 +47,8 @@ jobs:
                   publish_dir: ./website-docs/build
                   user_name: 'github-actions[bot]'
                   user_email: 'github-actions[bot]@users.noreply.github.com'
+                  commit_message: 'chore: deploy documentation website [skip ci]'
+                  enable_jekyll: false
+                  full_commit_message: |
+                      chore: deploy documentation website [skip ci]
+                      Signed-off-by: github-actions[bot] <github-actions[bot]@users.noreply.github.com>
