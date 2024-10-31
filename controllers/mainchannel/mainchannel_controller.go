@@ -876,11 +876,9 @@ func (r *FabricMainChannelReconciler) mapToConfigTX(channel *hlfv1alpha1.FabricM
 		},
 	}
 	// if etcdraft, add BlockValidation policy
-	if channel.Spec.ChannelConfig.Orderer.OrdererType == hlfv1alpha1.OrdererConsensusEtcdraft {
-		adminOrdererPolicies["BlockValidation"] = configtx.Policy{
-			Type: "ImplicitMeta",
-			Rule: "ANY Writers",
-		}
+	adminOrdererPolicies["BlockValidation"] = configtx.Policy{
+		Type: "ImplicitMeta",
+		Rule: "ANY Writers",
 	}
 
 	var state orderer.ConsensusState
@@ -919,7 +917,6 @@ func (r *FabricMainChannelReconciler) mapToConfigTX(channel *hlfv1alpha1.FabricM
 				ServerTlsCert: utils.EncodeX509Certificate(serverTLSCert),
 			})
 		}
-		//
 
 		leader_rotation := sb.Options_ROTATION_ON
 		if channel.Spec.ChannelConfig.Orderer.SmartBFT.LeaderRotation == sb.Options_ROTATION_ON {
@@ -977,7 +974,7 @@ func (r *FabricMainChannelReconciler) mapToConfigTX(channel *hlfv1alpha1.FabricM
 	ordConfigtx := configtx.Orderer{
 		OrdererType:      ordererType,
 		Organizations:    ordererOrgs,
-		ConsenterMapping: consenterMapping, // TODO: map from channel.Spec.ConssenterMapping
+		ConsenterMapping: consenterMapping,
 		SmartBFT:         smartBFTOptions,
 		EtcdRaft:         etcdRaft,
 		Policies:         adminOrdererPolicies,
@@ -1429,10 +1426,6 @@ func updateOrdererChannelConfigTx(currentConfigTX configtx.ConfigTx, newConfigTx
 			}
 		}
 	} else if newConfigTx.Orderer.OrdererType == orderer.ConsensusTypeBFT {
-		err = currentConfigTX.Orderer().SetConfiguration(newConfigTx.Orderer)
-		if err != nil {
-			return errors.Wrapf(err, "failed to set orderer configuration")
-		}
 		var consenterMapping []*cb.Consenter
 		for _, consenter := range newConfigTx.Orderer.ConsenterMapping {
 			consenterMapping = append(consenterMapping, &cb.Consenter{
@@ -1452,7 +1445,7 @@ func updateOrdererChannelConfigTx(currentConfigTX configtx.ConfigTx, newConfigTx
 	}
 
 	// update
-	if ord.OrdererType == "BFT" {
+	if ord.OrdererType == orderer.ConsensusTypeBFT {
 		err = currentConfigTX.Orderer().SetConfiguration(newConfigTx.Orderer)
 		if err != nil {
 			return errors.Wrapf(err, "failed to set orderer configuration")

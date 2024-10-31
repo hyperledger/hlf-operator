@@ -118,7 +118,8 @@ To install helm: [https://helm.sh/docs/intro/install/](https://helm.sh/docs/intr
 ```bash
 helm repo add kfs https://kfsoftware.github.io/hlf-helm-charts --force-update
 
-helm install hlf-operator --version=1.10.0 -- kfs/hlf-operator
+helm install hlf-operator --version=1.11.0-beta8-1 -- kfs/hlf-operator
+helm upgrade hlf-operator --version=1.11.0-beta8-1 -- kfs/hlf-operator
 ```
 
 
@@ -218,7 +219,7 @@ EOF
 ## Deploy a `Peer` organization
 
 
-### Environment Variables for AMD (Default)
+### Environment Variables
 
 ```bash
 export PEER_IMAGE=hyperledger/fabric-peer
@@ -230,23 +231,6 @@ export ORDERER_VERSION=3.0.0
 export CA_IMAGE=hyperledger/fabric-ca
 export CA_VERSION=1.5.13
 ```
-
-
-### Environment Variables for ARM (Mac M1)
-
-```bash
-export PEER_IMAGE=hyperledger/fabric-peer
-export PEER_VERSION=3.0.0
-
-export ORDERER_IMAGE=hyperledger/fabric-orderer
-export ORDERER_VERSION=3.0.0
-
-export CA_IMAGE=hyperledger/fabric-ca             
-export CA_VERSION=1.5.13
-
-```
-
-
 
 ### Configure Internal DNS
 
@@ -704,8 +688,6 @@ echo "PACKAGE_ID=$PACKAGE_ID"
 
 kubectl hlf chaincode install --path=./chaincode.tgz \
     --config=org1.yaml --language=golang --label=$CHAINCODE_LABEL --user=admin --peer=org1-peer0.default
-kubectl hlf chaincode install --path=./chaincode.tgz \
-    --config=org1.yaml --language=golang --label=$CHAINCODE_LABEL --user=admin --peer=org1-peer1.default
 
 ```
 
@@ -735,14 +717,14 @@ export VERSION="1.0"
 kubectl hlf chaincode approveformyorg --config=org1.yaml --user=admin --peer=org1-peer0.default \
     --package-id=$PACKAGE_ID \
     --version "$VERSION" --sequence "$SEQUENCE" --name=asset \
-    --policy="OR('Org1MSP.member')" --channel=testbft02
+    --policy="OR('Org1MSP.member')" --channel=demo
 ```
 
 ## Commit chaincode
 ```bash
 kubectl hlf chaincode commit --config=org1.yaml --user=admin --mspid=Org1MSP \
     --version "$VERSION" --sequence "$SEQUENCE" --name=asset \
-    --policy="OR('Org1MSP.member')" --channel=testbft02
+    --policy="OR('Org1MSP.member')" --channel=demo
 ```
 
 
@@ -751,7 +733,7 @@ kubectl hlf chaincode commit --config=org1.yaml --user=admin --mspid=Org1MSP \
 ```bash
 kubectl hlf chaincode invoke --config=org1.yaml \
     --user=admin --peer=org1-peer0.default \
-    --chaincode=asset --channel=testbft02 \
+    --chaincode=asset --channel=demo \
     --fcn=initLedger -a '[]'
 ```
 
@@ -760,7 +742,7 @@ kubectl hlf chaincode invoke --config=org1.yaml \
 ```bash
 kubectl hlf chaincode query --config=org1.yaml \
     --user=admin --peer=org1-peer0.default \
-    --chaincode=asset --channel=testbft02 \
+    --chaincode=asset --channel=demo \
     --fcn=GetAllAssets -a '[]'
 ```
 
