@@ -2,9 +2,8 @@ name: Deploy Docusaurus to GitHub Pages
 
 on:
     push:
-        branches:
-            - "*"
-
+    pull_request:
+  
 jobs:
     deploy:
         name: Deploy to GitHub Page
