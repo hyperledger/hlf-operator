@@ -1426,6 +1426,10 @@ func updateOrdererChannelConfigTx(currentConfigTX configtx.ConfigTx, newConfigTx
 			}
 		}
 	} else if newConfigTx.Orderer.OrdererType == orderer.ConsensusTypeBFT {
+		err = currentConfigTX.Orderer().SetConfiguration(newConfigTx.Orderer)
+		if err != nil {
+			return errors.Wrapf(err, "failed to set orderer configuration")
+		}
 		var consenterMapping []*cb.Consenter
 		for _, consenter := range newConfigTx.Orderer.ConsenterMapping {
 			consenterMapping = append(consenterMapping, &cb.Consenter{

@@ -549,6 +549,103 @@ async function updatePeers(peers: { name: string; namespace: string }[]) {
 	}
 }
 
+async function restartOrderers(orderers: { name: string; namespace: string }[]) {
+	for (const orderer of orderers) {
+		try {
+			console.log(`Restarting orderer ${orderer.name} in namespace ${orderer.namespace}...`)
+			const appsV1Api = kc.makeApiClient(k8s.AppsV1Api)
+
+			// Scale down to 0
+			const patch = [
+				{
+					op: 'replace',
+					path: '/spec/replicas',
+					value: 0,
+				},
+			]
+
+			await appsV1Api.patchNamespacedDeployment(orderer.name, orderer.namespace, patch, undefined, undefined, undefined, undefined, undefined, {
+				headers: { 'Content-Type': 'application/json-patch+json' },
+			})
+			await new Promise((resolve) => setTimeout(resolve, 1000))
+			// Wait for scale down by polling the deployment state
+			let scaledDown = false
+			const maxWaitTime = 10 * 60 * 1000 // 10 minutes in milliseconds
+			const pollInterval = 1000 // 1 second
+			const startTime = Date.now()
+
+			while (!scaledDown && Date.now() - startTime < maxWaitTime) {
+				try {
+					const res = await appsV1Api.readNamespacedDeployment(orderer.name, orderer.namespace)
+					const deployment = res.body
+					const isReady =
+						deployment.status?.conditions?.some((condition) => condition.type === 'Available' && condition.status === 'True') &&
+						deployment.status?.readyReplicas === deployment.status?.replicas
+
+					if (isReady) {
+						scaledDown = true
+						console.log(`Orderer ${orderer.name} in namespace ${orderer.namespace} has been scaled down to 0`)
+					} else {
+						const elapsedTime = Math.floor((Date.now() - startTime) / 1000)
+						console.log(`Waiting for orderer ${orderer.name} in namespace ${orderer.namespace} to scale down (${elapsedTime} seconds elapsed)...`)
+						await new Promise((resolve) => setTimeout(resolve, pollInterval))
+					}
+				} catch (err) {
+					console.error(`Error checking orderer ${orderer.name} in namespace ${orderer.namespace} scale down status:`, err)
+					await new Promise((resolve) => setTimeout(resolve, pollInterval))
+				}
+			}
+
+			if (!scaledDown) {
+				console.error(`Orderer ${orderer.name} in namespace ${orderer.namespace} did not scale down within the expected time.`)
+				continue
+			}
+
+			// Scale back up to 1
+			patch[0].value = 1
+			await appsV1Api.patchNamespacedDeployment(orderer.name, orderer.namespace, patch, undefined, undefined, undefined, undefined, undefined, {
+				headers: { 'Content-Type': 'application/json-patch+json' },
+			})
+
+			// Wait for the orderer to be back up by polling the deployment state
+			let ready = false
+			const startTimeUp = Date.now()
+			await new Promise((resolve) => setTimeout(resolve, 1000))
+
+			while (!ready && Date.now() - startTimeUp < maxWaitTime) {
+				try {
+					const res = await appsV1Api.readNamespacedDeployment(orderer.name, orderer.namespace)
+					const deployment = res.body
+
+					const isReady =
+						deployment.status?.conditions?.some((condition) => condition.type === 'Available' && condition.status === 'True') &&
+						deployment.status?.readyReplicas === deployment.status?.replicas
+
+					if (isReady) {
+						ready = true
+						console.log(`Orderer ${orderer.name} in namespace ${orderer.namespace} is back up and ready`)
+					} else {
+						const elapsedTime = Math.floor((Date.now() - startTimeUp) / 1000)
+						console.log(`Waiting for orderer ${orderer.name} in namespace ${orderer.namespace} to be back up (${elapsedTime} seconds elapsed)...`)
+						await new Promise((resolve) => setTimeout(resolve, pollInterval))
+					}
+				} catch (err) {
+					console.error(`Error checking orderer ${orderer.name} in namespace ${orderer.namespace} status:`, err)
+					await new Promise((resolve) => setTimeout(resolve, pollInterval))
+				}
+			}
+
+			if (!ready) {
+				console.error(`Orderer ${orderer.name} in namespace ${orderer.namespace} did not become ready within the expected time.`)
+			} else {
+				console.log(`Successfully restarted orderer ${orderer.name}`)
+			}
+		} catch (err) {
+			console.error(`Error restarting orderer ${orderer.name}:`, err)
+		}
+	}
+}
+
 async function main() {
 	const channelName = await input({ message: 'Enter the channel name:' })
 	const channel = await getChannelFromKubernetes(channelName)
@@ -622,6 +719,15 @@ async function main() {
 	})
 	if (bftConfirmed) {
 		await updateChannelToBFT(channelName)
+	}
+
+	// Add restart confirmation
+	const restartConfirmed = await confirm({
+		message: `Restart the orderers before setting channel to normal state?`,
+		default: true,
+	})
+	if (restartConfirmed) {
+		await restartOrderers(selectedOrderers)
 	}
 
 	const stateNormalConfirmed = await confirm({
