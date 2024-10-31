@@ -446,7 +446,7 @@ spec:
         collect_timeout: "1s"
         sync_on_start: true
         speed_up_view_change: false
-        leader_rotation: 1 # off
+        leader_rotation: 0 # unspecified
         decisions_per_leader: 3
         request_max_bytes: 0
 

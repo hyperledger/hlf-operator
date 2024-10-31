@@ -7,10 +7,15 @@ on:
 
 jobs:
     deploy:
-        name: Deploy to GitHub Pages
+        name: Deploy to GitHub Page
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v3
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v3
+              with:
+                  node-version: '22'
 
             - name: Setup Bun
               uses: oven-sh/setup-bun@v1
@@ -28,12 +33,12 @@ jobs:
             - name: Install dependencies
               run: |
                   cd website-docs
-                  bun install
+                  yarn install --frozen-lockfile
 
             - name: Build Docusaurus website
               run: |
                   cd website-docs
-                  bun run build
+                  yarn run build
 
             - name: Deploy to GitHub Pages
               uses: peaceiris/actions-gh-pages@v3
