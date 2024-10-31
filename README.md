@@ -13,7 +13,7 @@ title: Getting started
 - [x] Create resources without manual provisioning of cryptographic material
 - [x] Domain routing with SNI using Istio
 - [x] Run chaincode as external chaincode in Kubernetes
-- [x] Support Hyperledger Fabric 2.3+
+- [x] Support Hyperledger Fabric 2.3+ and 3.0
 - [x] Managed genesis for Ordering services
 - [x] E2E testing including the execution of chaincodes in KIND
 - [x] Renewal of certificates
