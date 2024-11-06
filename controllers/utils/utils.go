@@ -6,11 +6,12 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
-	log "github.com/sirupsen/logrus"
 	"net"
 	"strconv"
 	"strings"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
 	v12 "k8s.io/api/core/v1"
@@ -70,7 +71,13 @@ func ParseECDSAPrivateKey(contents []byte) (*ecdsa.PrivateKey, error) {
 	return ecdsaKey, nil
 }
 func ParseX509Certificate(contents []byte) (*x509.Certificate, error) {
+	if len(contents) == 0 {
+		return nil, errors.New("certificate pem is empty")
+	}
 	block, _ := pem.Decode(contents)
+	if block == nil {
+		return nil, errors.New("failed to decode PEM block")
+	}
 	crt, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
 		return nil, err
