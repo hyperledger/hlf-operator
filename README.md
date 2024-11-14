@@ -144,12 +144,10 @@ Install Istio on the Kubernetes cluster:
 
 ```bash
 
-kubectl create namespace istio-system
-
 export ISTIO_PATH=$(echo $PWD/istio-*/bin)
 export PATH="$PATH:$ISTIO_PATH"
 
-istioctl operator init
+istioctl install --set profile=default -y
 
 kubectl apply -f - <<EOF
 apiVersion: install.istio.io/v1alpha1
