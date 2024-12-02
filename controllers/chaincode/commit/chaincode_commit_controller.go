@@ -241,16 +241,24 @@ func (r *FabricChaincodeCommitReconciler) updateCRStatusOrFailReconcile(ctx cont
 	if err := r.Status().Update(ctx, p); err != nil {
 		log.Error(err, fmt.Sprintf("%v failed to update the application status", ErrClientK8s))
 		return reconcile.Result{
-			Requeue:      false,
-			RequeueAfter: 0,
-		}, err
+			Requeue:      true,
+			RequeueAfter: time.Second * 10,
+		}, nil
 	}
+
 	if p.Status.Status == hlfv1alpha1.FailedStatus {
 		return reconcile.Result{
 			RequeueAfter: 1 * time.Minute,
 		}, nil
 	}
-	return reconcile.Result{}, nil
+
+	if p.Status.Status == hlfv1alpha1.RunningStatus {
+		return reconcile.Result{}, nil
+	}
+
+	return reconcile.Result{
+		RequeueAfter: 1 * time.Minute,
+	}, nil
 }
 
 func (r *FabricChaincodeCommitReconciler) SetupWithManager(mgr ctrl.Manager) error {

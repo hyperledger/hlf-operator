@@ -315,19 +315,26 @@ func (r *FabricChaincodeApproveReconciler) updateCRStatusOrFailReconcile(ctx con
 	if err := r.Status().Update(ctx, p); err != nil {
 		log.Error(err, fmt.Sprintf("%v failed to update the application status", ErrClientK8s))
 		return reconcile.Result{
-			Requeue:      false,
-			RequeueAfter: 0,
+			Requeue:      true,
+			RequeueAfter: time.Second * 10,
 		}, nil
 	}
+
+	// If status is failed, requeue after 1 minute
 	if p.Status.Status == hlfv1alpha1.FailedStatus {
 		return reconcile.Result{
 			RequeueAfter: 1 * time.Minute,
 		}, nil
 	}
-	r.Log.Info(fmt.Sprintf("Requeueing after 1 minute for %s", p.Name))
+
+	// If status is running/success, don't requeue
+	if p.Status.Status == hlfv1alpha1.RunningStatus {
+		return reconcile.Result{}, nil
+	}
+
+	// For any other status, requeue after 1 minute
 	return reconcile.Result{
-		Requeue:      false,
-		RequeueAfter: 0,
+		RequeueAfter: 1 * time.Minute,
 	}, nil
 }
 

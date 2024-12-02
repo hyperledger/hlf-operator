@@ -101,6 +101,12 @@ spec:
                   - namespace
                   type: object
                 type: array
+              revocationList:
+                default: []
+                items:
+                  type: string
+                nullable: true
+                type: array
             required:
             - anchorPeers
             - externalPeersToJoin
