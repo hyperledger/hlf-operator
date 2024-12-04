@@ -1602,6 +1602,7 @@ type FabricNetworkConfigOrgPeer struct {
 type FabricNetworkConfigOrganization struct {
 	Peers []FabricNetworkConfigOrgPeer `json:"peers"`
 }
+
 type FabricNetworkConfigCA struct {
 	Name      string `json:"name"`
 	Namespace string `json:"namespace"`
@@ -2758,6 +2759,11 @@ type FabricFollowerChannelSpec struct {
 	AnchorPeers []FabricFollowerChannelAnchorPeer `json:"anchorPeers"`
 	// Identity to use to interact with the peers and the orderers
 	HLFIdentity HLFIdentity `json:"hlfIdentity"`
+	// +nullable
+	// +optional
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default:={}
+	RevocationList []string `json:"revocationList"`
 }
 
 type FabricFollowerChannelAnchorPeer struct {

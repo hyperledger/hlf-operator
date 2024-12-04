@@ -3,6 +3,7 @@ package followerchannel
 import (
 	"bytes"
 	"context"
+	"crypto/x509/pkix"
 	"fmt"
 	"strings"
 	"time"
@@ -279,7 +280,6 @@ func (r *FabricFollowerChannelReconciler) Reconcile(ctx context.Context, req ctr
 		reqLogger.Info(fmt.Sprintf("Removed anchor peer %v", anchorPeer))
 	}
 	r.Log.Info(fmt.Sprintf("New anchor peers %v", anchorPeers))
-
 	for _, anchorPeer := range fabricFollowerChannel.Spec.AnchorPeers {
 		err = app.AddAnchorPeer(configtx.Address{
 			Host: anchorPeer.Host,
@@ -291,6 +291,32 @@ func (r *FabricFollowerChannelReconciler) Reconcile(ctx context.Context, req ctr
 			return r.updateCRStatusOrFailReconcile(ctx, r.Log, fabricFollowerChannel)
 		}
 	}
+
+	r.Log.Info("Setting CRL configuration")
+
+	msp := app.MSP()
+	mspConf, err := msp.Configuration()
+	if err != nil {
+		r.setConditionStatus(ctx, fabricFollowerChannel, hlfv1alpha1.FailedStatus, false, err, false)
+		return r.updateCRStatusOrFailReconcile(ctx, r.Log, fabricFollowerChannel)
+	}
+	var revocationList []*pkix.CertificateList
+	for _, revocation := range fabricFollowerChannel.Spec.RevocationList {
+		crl, err := utils.ParseCRL([]byte(revocation))
+		if err != nil {
+			r.setConditionStatus(ctx, fabricFollowerChannel, hlfv1alpha1.FailedStatus, false, err, false)
+			return r.updateCRStatusOrFailReconcile(ctx, r.Log, fabricFollowerChannel)
+		}
+		revocationList = append(revocationList, crl)
+	}
+	mspConf.RevocationList = revocationList
+	err = app.SetMSP(mspConf)
+	if err != nil {
+		r.setConditionStatus(ctx, fabricFollowerChannel, hlfv1alpha1.FailedStatus, false, err, false)
+		return r.updateCRStatusOrFailReconcile(ctx, r.Log, fabricFollowerChannel)
+	}
+	r.Log.Info("CRL configuration set")
+	r.Log.Info("Updating channel configuration")
 	configUpdateBytes, err := cftxGen.ComputeMarshaledUpdate(fabricFollowerChannel.Spec.Name)
 	if err != nil {
 		if !strings.Contains(err.Error(), "no differences detected between original and updated config") {

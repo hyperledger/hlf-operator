@@ -118,7 +118,7 @@ To install helm: [https://helm.sh/docs/intro/install/](https://helm.sh/docs/intr
 ```bash
 helm repo add kfs https://kfsoftware.github.io/hlf-helm-charts --force-update
 
-helm install hlf-operator --version=1.11.0 -- kfs/hlf-operator
+helm install hlf-operator --version=1.11.1 -- kfs/hlf-operator
 ```
 
 
@@ -137,7 +137,7 @@ kubectl krew install hlf
 
 Install Istio binaries on the machine:
 ```bash
-curl -L https://istio.io/downloadIstio | sh -
+curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.23.3 sh -
 ```
 
 Install Istio on the Kubernetes cluster:

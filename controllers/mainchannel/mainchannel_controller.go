@@ -660,7 +660,7 @@ func (r *FabricMainChannelReconciler) saveChannelConfig(ctx context.Context, fab
 
 	configMapName := fmt.Sprintf("%s-config", fabricMainChannel.ObjectMeta.Name)
 	configMapNamespace := "default"
-
+	r.Log.Info("Saving channel config into configmap", "configmap", configMapName)
 	return r.createOrUpdateConfigMap(ctx, configMapName, configMapNamespace, buf.String())
 }
 
@@ -893,6 +893,9 @@ func (r *FabricMainChannelReconciler) mapToConfigTX(channel *hlfv1alpha1.FabricM
 	consenters := []orderer.Consenter{}
 	var smartBFTOptions *sb.Options
 	if channel.Spec.ChannelConfig.Orderer.OrdererType == hlfv1alpha1.OrdererConsensusBFT {
+		if len(channel.Spec.ChannelConfig.Orderer.ConsenterMapping) <= 4 {
+			return configtx.Channel{}, fmt.Errorf("consenter mapping needs to be at least 4")
+		}
 		ordererType = string(orderer.ConsensusTypeBFT)
 		for _, consenterItem := range channel.Spec.ChannelConfig.Orderer.ConsenterMapping {
 			identityCert, err := utils.ParseX509Certificate([]byte(consenterItem.Identity))
@@ -1373,7 +1376,6 @@ func updateChannelConfigTx(currentConfigTX configtx.ConfigTx, newConfigTx config
 }
 
 func updateOrdererChannelConfigTx(currentConfigTX configtx.ConfigTx, newConfigTx configtx.Channel) error {
-
 	ord, err := currentConfigTX.Orderer().Configuration()
 	if err != nil {
 		return errors.Wrapf(err, "failed to get application configuration")
