@@ -2,17 +2,20 @@ package channel
 
 import (
 	"context"
+	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric-config/configtx/orderer"
 	"github.com/kfsoftware/hlf-operator/controllers/testutils"
 	"github.com/kfsoftware/hlf-operator/controllers/utils"
 	"github.com/kfsoftware/hlf-operator/kubectl-hlf/cmd/helpers"
+	hlfv1alpha1 "github.com/kfsoftware/hlf-operator/pkg/apis/hlf.kungfusoftware.es/v1alpha1"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"io"
 	"io/ioutil"
 	"strings"
+	"time"
 )
 
 type generateChannelCmd struct {
@@ -24,7 +27,11 @@ type generateChannelCmd struct {
 	maxMessageCount      int
 	absoluteMaxBytes     int
 	preferredMaxBytes    int
+	batchTimeout         int
+	consensus            hlfv1alpha1.OrdererConsensusType
 }
+
+var validConsensusTypes = []hlfv1alpha1.OrdererConsensusType{hlfv1alpha1.OrdererConsensusBFT, hlfv1alpha1.OrdererConsensusEtcdraft}
 
 func (c generateChannelCmd) validate() error {
 	if c.channelName == "" {
@@ -82,6 +89,10 @@ func (c generateChannelCmd) run() error {
 		if err != nil {
 			return err
 		}
+		signCert, err := utils.ParseX509Certificate([]byte(consenter.Status.SignCert))
+		if err != nil {
+			return err
+		}
 		consenterHost, consenterPort, err := helpers.GetOrdererHostAndPort(
 			clientSet,
 			consenter.Spec,
@@ -94,6 +105,8 @@ func (c generateChannelCmd) run() error {
 			consenterHost,
 			consenterPort,
 			tlsCert,
+			signCert,
+			consenter.Spec.MspID,
 		)
 		consenters = append(consenters, createConsenter)
 		_, ok := ordererMap[consenter.Spec.MspID]
@@ -189,6 +202,8 @@ func (c generateChannelCmd) run() error {
 			AbsoluteMaxBytes:  uint32(c.absoluteMaxBytes),
 			PreferredMaxBytes: uint32(c.preferredMaxBytes),
 		}),
+		testutils.WithBatchTimeout(time.Duration(c.batchTimeout)*time.Second),
+		testutils.WithConsensus(c.consensus),
 	)
 	if err != nil {
 		return err
@@ -223,6 +238,8 @@ func newGenerateChannelCMD(io.Writer, io.Writer) *cobra.Command {
 	persistentFlags.IntVarP(&c.maxMessageCount, "maxMessageCount", "", 100, "Max transactions per block")
 	persistentFlags.IntVarP(&c.absoluteMaxBytes, "absoluteMaxBytes", "", 1024*1024, "Max size per block")
 	persistentFlags.IntVarP(&c.preferredMaxBytes, "preferredMaxBytes", "", 512*1024, "Max size per block")
+	persistentFlags.IntVarP(&c.batchTimeout, "batchTimeout", "", 2, "Batch timeout in seconds")
+	persistentFlags.Var(hlfv1alpha1.NewConsensusTypeValue(hlfv1alpha1.OrdererConsensusEtcdraft, validConsensusTypes, &c.consensus), "consensus", fmt.Sprintf("Consensus type ( %s, %s), default etcdraft", hlfv1alpha1.OrdererConsensusBFT, hlfv1alpha1.OrdererConsensusEtcdraft))
 	cmd.MarkPersistentFlagRequired("name")
 	cmd.MarkPersistentFlagRequired("organizations")
 	cmd.MarkPersistentFlagRequired("ordererOrganizations")
