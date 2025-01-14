@@ -23,6 +23,7 @@ import (
 	cb "github.com/hyperledger/fabric-protos-go/common"
 	sb "github.com/hyperledger/fabric-protos-go/orderer/smartbft"
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/resmgmt"
+	"github.com/hyperledger/fabric-sdk-go/pkg/common/errors/retry"
 	fab2 "github.com/hyperledger/fabric-sdk-go/pkg/common/providers/fab"
 	"github.com/hyperledger/fabric-sdk-go/pkg/common/providers/msp"
 	"github.com/hyperledger/fabric-sdk-go/pkg/core/config"
@@ -397,18 +398,12 @@ func (r *FabricMainChannelReconciler) joinInternalOrderers(ctx context.Context, 
 func (r *FabricMainChannelReconciler) fetchOrdererChannelBlock(resClient *resmgmt.Client, fabricMainChannel *hlfv1alpha1.FabricMainChannel, resmgmtOptions []resmgmt.RequestOption) (*common.Block, error) {
 	var ordererChannelBlock *common.Block
 	var err error
-	attemptsLeft := 5
-	for {
-		ordererChannelBlock, err = resClient.QueryConfigBlockFromOrderer(fabricMainChannel.Spec.Name, resmgmtOptions...)
-		if err == nil || attemptsLeft == 0 {
-			break
-		}
-		if err != nil {
-			attemptsLeft--
-		}
-		log.Infof("Failed to get block %v, attempts left %d", err, attemptsLeft)
-		time.Sleep(1500 * time.Millisecond)
-	}
+	resmgmtOptions = append(resmgmtOptions, resmgmt.WithRetry(retry.Opts{
+		Attempts:       5,
+		InitialBackoff: 1000 * time.Millisecond,
+		MaxBackoff:     10 * time.Second,
+	}))
+	ordererChannelBlock, err = resClient.QueryConfigBlockFromOrderer(fabricMainChannel.Spec.Name, resmgmtOptions...)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get block from channel %s", fabricMainChannel.Spec.Name)
 	}
@@ -500,14 +495,15 @@ func (r *FabricMainChannelReconciler) setupResmgmtOptions(fabricMainChannel *hlf
 func (r *FabricMainChannelReconciler) fetchConfigBlock(resClient *resmgmt.Client, fabricMainChannel *hlfv1alpha1.FabricMainChannel, resmgmtOptions []resmgmt.RequestOption) ([]byte, error) {
 	var channelBlock *cb.Block
 	var err error
+	resmgmtOptions = append(resmgmtOptions, resmgmt.WithRetry(retry.Opts{
+		Attempts:       5,
+		InitialBackoff: 1000 * time.Millisecond,
+		MaxBackoff:     10 * time.Second,
+	}))
 
-	for i := 0; i < 5; i++ {
-		channelBlock, err = resClient.QueryConfigBlockFromOrderer(fabricMainChannel.Spec.Name, resmgmtOptions...)
-		if err == nil {
-			break
-		}
-		log.Warnf("Attempt %d failed to query config block from orderer: %v retrying in 1 second", i+1, err)
-		time.Sleep(1 * time.Second)
+	channelBlock, err = resClient.QueryConfigBlockFromOrderer(fabricMainChannel.Spec.Name, resmgmtOptions...)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to query config block from orderer %s", fabricMainChannel.Spec.Name)
 	}
 
 	if err != nil {

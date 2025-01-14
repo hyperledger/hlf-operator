@@ -3,14 +3,15 @@ package channel
 import (
 	"bytes"
 	"fmt"
-	"github.com/hyperledger/fabric-sdk-go/pkg/client/resmgmt"
+	"io"
+	"io/ioutil"
+
+	"github.com/hyperledger/fabric-config/protolator"
+	"github.com/hyperledger/fabric-sdk-go/pkg/client/ledger"
 	"github.com/hyperledger/fabric-sdk-go/pkg/core/config"
-	"github.com/hyperledger/fabric-sdk-go/pkg/fab/resource"
 	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
-	"github.com/hyperledger/fabric/common/tools/protolator"
 	"github.com/kfsoftware/hlf-operator/kubectl-hlf/cmd/helpers"
 	"github.com/spf13/cobra"
-	"io"
 )
 
 type inspectChannelCmd struct {
@@ -42,26 +43,31 @@ func (c *inspectChannelCmd) run(out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	org1AdminClientContext := sdk.Context(
-		fabsdk.WithUser(c.userName),
-		fabsdk.WithOrg(mspID),
-	)
-	resClient, err := resmgmt.New(org1AdminClientContext)
+	// org1AdminClientContext := sdk.Context(
+	// 	fabsdk.WithUser(c.userName),
+	// 	fabsdk.WithOrg(mspID),
+	// )
+	// resClient, err := resmgmt.New(org1AdminClientContext)
+	// if err != nil {
+	// 	return err
+	// }
+	chContext := sdk.ChannelContext(c.channelName, fabsdk.WithUser(c.userName), fabsdk.WithOrg(mspID))
+	ledgerClient, err := ledger.New(chContext)
 	if err != nil {
 		return err
 	}
-	block, err := resClient.QueryConfigBlockFromOrderer(
-		c.channelName,
-	)
+	block, err := ledgerClient.QueryConfigBlock()
 	if err != nil {
 		return err
 	}
-	cmnConfig, err := resource.ExtractConfigFromBlock(block)
-	if err != nil {
-		return err
-	}
+	ioutil.WriteFile("block.json", []byte(block.String()), 0644)
+
+	// cmnConfig, err := resource.ExtractConfigFromBlock(block)
+	// if err != nil {
+	// 	return err
+	// }
 	var buf bytes.Buffer
-	err = protolator.DeepMarshalJSON(&buf, cmnConfig)
+	err = protolator.DeepMarshalJSON(&buf, block)
 	if err != nil {
 		return err
 	}
