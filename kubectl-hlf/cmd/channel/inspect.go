@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 
 	"github.com/hyperledger/fabric-config/protolator"
-	"github.com/hyperledger/fabric-sdk-go/pkg/client/ledger"
+	"github.com/hyperledger/fabric-sdk-go/pkg/client/resmgmt"
 	"github.com/hyperledger/fabric-sdk-go/pkg/core/config"
+	"github.com/hyperledger/fabric-sdk-go/pkg/fab/resource"
 	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
 	"github.com/kfsoftware/hlf-operator/kubectl-hlf/cmd/helpers"
 	"github.com/spf13/cobra"
@@ -19,6 +19,7 @@ type inspectChannelCmd struct {
 	peer        string
 	channelName string
 	userName    string
+	ordererName string
 }
 
 func (c *inspectChannelCmd) validate() error {
@@ -43,31 +44,28 @@ func (c *inspectChannelCmd) run(out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	// org1AdminClientContext := sdk.Context(
-	// 	fabsdk.WithUser(c.userName),
-	// 	fabsdk.WithOrg(mspID),
-	// )
-	// resClient, err := resmgmt.New(org1AdminClientContext)
-	// if err != nil {
-	// 	return err
-	// }
-	chContext := sdk.ChannelContext(c.channelName, fabsdk.WithUser(c.userName), fabsdk.WithOrg(mspID))
-	ledgerClient, err := ledger.New(chContext)
+	org1AdminClientContext := sdk.Context(
+		fabsdk.WithUser(c.userName),
+		fabsdk.WithOrg(mspID),
+	)
+	resClient, err := resmgmt.New(org1AdminClientContext)
 	if err != nil {
 		return err
 	}
-	block, err := ledgerClient.QueryConfigBlock()
+	resmgmtOptions := []resmgmt.RequestOption{}
+	if c.ordererName != "" {
+		resmgmtOptions = append(resmgmtOptions, resmgmt.WithOrdererEndpoint(c.ordererName))
+	}
+	block, err := resClient.QueryConfigBlockFromOrderer(c.channelName, resmgmtOptions...)
 	if err != nil {
 		return err
 	}
-	ioutil.WriteFile("block.json", []byte(block.String()), 0644)
-
-	// cmnConfig, err := resource.ExtractConfigFromBlock(block)
-	// if err != nil {
-	// 	return err
-	// }
+	cmnConfig, err := resource.ExtractConfigFromBlock(block)
+	if err != nil {
+		return err
+	}
 	var buf bytes.Buffer
-	err = protolator.DeepMarshalJSON(&buf, block)
+	err = protolator.DeepMarshalJSON(&buf, cmnConfig)
 	if err != nil {
 		return err
 	}
@@ -93,6 +91,7 @@ func newInspectChannelCMD(out io.Writer, errOut io.Writer) *cobra.Command {
 	persistentFlags.StringVarP(&c.userName, "user", "u", "", "User name for the transaction")
 	persistentFlags.StringVarP(&c.channelName, "channel", "c", "", "Channel name")
 	persistentFlags.StringVarP(&c.configPath, "config", "", "", "Configuration file for the SDK")
+	persistentFlags.StringVarP(&c.ordererName, "orderer", "o", "", "Orderer endpoint to fetch config from (optional)")
 	cmd.MarkPersistentFlagRequired("channel")
 	cmd.MarkPersistentFlagRequired("user")
 	cmd.MarkPersistentFlagRequired("peer")
