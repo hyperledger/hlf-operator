@@ -118,7 +118,7 @@ func (r *FabricMainChannelReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 	options, _ := r.setupResmgmtOptions(fabricMainChannel)
 
-	blockBytes, err := r.fetchConfigBlock(resClient, fabricMainChannel, options)
+	blockBytes, err := r.fetchConfigBlock(resClient, fabricMainChannel)
 	if err != nil {
 		return r.handleReconcileError(ctx, fabricMainChannel, err)
 	}
@@ -127,11 +127,11 @@ func (r *FabricMainChannelReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return r.handleReconcileError(ctx, fabricMainChannel, err)
 	}
 
-	if err := r.updateChannelConfig(ctx, fabricMainChannel, resClient, options, blockBytes, sdk, clientSet); err != nil {
+	if err := r.updateChannelConfig(ctx, fabricMainChannel, resClient, options, sdk, clientSet); err != nil {
 		return r.handleReconcileError(ctx, fabricMainChannel, err)
 	}
 	time.Sleep(3 * time.Second)
-	if err := r.saveChannelConfig(ctx, fabricMainChannel, resClient, options); err != nil {
+	if err := r.saveChannelConfig(ctx, fabricMainChannel, resClient); err != nil {
 		return r.handleReconcileError(ctx, fabricMainChannel, err)
 	}
 
@@ -414,9 +414,7 @@ func (r *FabricMainChannelReconciler) queryConfigBlockFromOrdererWithRoundRobin(
 		}
 
 		// Add any other options that were passed in (except orderer endpoints)
-		for _, opt := range resmgmtOptions {
-			ordererOpts = append(ordererOpts, opt)
-		}
+		ordererOpts = append(ordererOpts, resmgmtOptions...)
 
 		log.Infof("Attempting to query config block from orderer %s", endpoint)
 		block, err := resClient.QueryConfigBlockFromOrderer(channelID, ordererOpts...)
@@ -432,14 +430,9 @@ func (r *FabricMainChannelReconciler) queryConfigBlockFromOrdererWithRoundRobin(
 	return nil, fmt.Errorf("failed to query config block from all orderers, last error: %v", lastErr)
 }
 
-func (r *FabricMainChannelReconciler) fetchOrdererChannelBlock(resClient *resmgmt.Client, fabricMainChannel *hlfv1alpha1.FabricMainChannel, resmgmtOptions []resmgmt.RequestOption) (*common.Block, error) {
+func (r *FabricMainChannelReconciler) fetchOrdererChannelBlock(resClient *resmgmt.Client, fabricMainChannel *hlfv1alpha1.FabricMainChannel) (*common.Block, error) {
 	var ordererChannelBlock *common.Block
 	var err error
-	resmgmtOptions = append(resmgmtOptions, resmgmt.WithRetry(retry.Opts{
-		Attempts:       5,
-		InitialBackoff: 1000 * time.Millisecond,
-		MaxBackoff:     10 * time.Second,
-	}))
 
 	options, endpoints := r.setupResmgmtOptions(fabricMainChannel)
 	ordererChannelBlock, err = r.queryConfigBlockFromOrdererWithRoundRobin(resClient, fabricMainChannel.Spec.Name, endpoints, options)
@@ -529,23 +522,15 @@ func (r *FabricMainChannelReconciler) setupResmgmtOptions(fabricMainChannel *hlf
 
 	var ordererEndpoints []string
 	for _, ordOrg := range fabricMainChannel.Spec.OrdererOrganizations {
-		for _, endpoint := range ordOrg.OrdererEndpoints {
-			ordererEndpoints = append(ordererEndpoints, endpoint)
-			// resmgmtOptions = append(resmgmtOptions)
-		}
+		ordererEndpoints = append(ordererEndpoints, ordOrg.OrdererEndpoints...)
 	}
 
 	return resmgmtOptions, ordererEndpoints
 }
 
-func (r *FabricMainChannelReconciler) fetchConfigBlock(resClient *resmgmt.Client, fabricMainChannel *hlfv1alpha1.FabricMainChannel, resmgmtOptions []resmgmt.RequestOption) ([]byte, error) {
+func (r *FabricMainChannelReconciler) fetchConfigBlock(resClient *resmgmt.Client, fabricMainChannel *hlfv1alpha1.FabricMainChannel) ([]byte, error) {
 	var channelBlock *cb.Block
 	var err error
-	resmgmtOptions = append(resmgmtOptions, resmgmt.WithRetry(retry.Opts{
-		Attempts:       5,
-		InitialBackoff: 1000 * time.Millisecond,
-		MaxBackoff:     10 * time.Second,
-	}))
 
 	options, endpoints := r.setupResmgmtOptions(fabricMainChannel)
 	channelBlock, err = r.queryConfigBlockFromOrdererWithRoundRobin(resClient, fabricMainChannel.Spec.Name, endpoints, options)
@@ -596,8 +581,8 @@ func (r *FabricMainChannelReconciler) joinOrderers(ctx context.Context, fabricMa
 	return nil
 }
 
-func (r *FabricMainChannelReconciler) updateChannelConfig(ctx context.Context, fabricMainChannel *hlfv1alpha1.FabricMainChannel, resClient *resmgmt.Client, resmgmtOptions []resmgmt.RequestOption, blockBytes []byte, sdk *fabsdk.FabricSDK, clientSet *kubernetes.Clientset) error {
-	ordererChannelBlock, err := r.fetchOrdererChannelBlock(resClient, fabricMainChannel, resmgmtOptions)
+func (r *FabricMainChannelReconciler) updateChannelConfig(ctx context.Context, fabricMainChannel *hlfv1alpha1.FabricMainChannel, resClient *resmgmt.Client, resmgmtOptions []resmgmt.RequestOption, sdk *fabsdk.FabricSDK, clientSet *kubernetes.Clientset) error {
+	ordererChannelBlock, err := r.fetchOrdererChannelBlock(resClient, fabricMainChannel)
 	if err != nil {
 		return err
 	}
@@ -680,8 +665,8 @@ func (r *FabricMainChannelReconciler) updateChannelConfig(ctx context.Context, f
 	return nil
 }
 
-func (r *FabricMainChannelReconciler) saveChannelConfig(ctx context.Context, fabricMainChannel *hlfv1alpha1.FabricMainChannel, resClient *resmgmt.Client, resmgmtOptions []resmgmt.RequestOption) error {
-	ordererChannelBlock, err := r.fetchOrdererChannelBlock(resClient, fabricMainChannel, resmgmtOptions)
+func (r *FabricMainChannelReconciler) saveChannelConfig(ctx context.Context, fabricMainChannel *hlfv1alpha1.FabricMainChannel, resClient *resmgmt.Client) error {
+	ordererChannelBlock, err := r.fetchOrdererChannelBlock(resClient, fabricMainChannel)
 	if err != nil {
 		return err
 	}
