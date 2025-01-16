@@ -116,9 +116,9 @@ func (r *FabricMainChannelReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return r.handleReconcileError(ctx, fabricMainChannel, err)
 	}
 
-	resmgmtOptions := r.setupResmgmtOptions(fabricMainChannel)
+	options, _ := r.setupResmgmtOptions(fabricMainChannel)
 
-	blockBytes, err := r.fetchConfigBlock(resClient, fabricMainChannel, resmgmtOptions)
+	blockBytes, err := r.fetchConfigBlock(resClient, fabricMainChannel, options)
 	if err != nil {
 		return r.handleReconcileError(ctx, fabricMainChannel, err)
 	}
@@ -127,11 +127,11 @@ func (r *FabricMainChannelReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return r.handleReconcileError(ctx, fabricMainChannel, err)
 	}
 
-	if err := r.updateChannelConfig(ctx, fabricMainChannel, resClient, resmgmtOptions, blockBytes, sdk, clientSet); err != nil {
+	if err := r.updateChannelConfig(ctx, fabricMainChannel, resClient, options, blockBytes, sdk, clientSet); err != nil {
 		return r.handleReconcileError(ctx, fabricMainChannel, err)
 	}
 	time.Sleep(3 * time.Second)
-	if err := r.saveChannelConfig(ctx, fabricMainChannel, resClient, resmgmtOptions); err != nil {
+	if err := r.saveChannelConfig(ctx, fabricMainChannel, resClient, options); err != nil {
 		return r.handleReconcileError(ctx, fabricMainChannel, err)
 	}
 
@@ -395,6 +395,43 @@ func (r *FabricMainChannelReconciler) joinInternalOrderers(ctx context.Context, 
 	return nil
 }
 
+func (r *FabricMainChannelReconciler) queryConfigBlockFromOrdererWithRoundRobin(resClient *resmgmt.Client, channelID string, ordererEndpoints []string, resmgmtOptions []resmgmt.RequestOption) (*common.Block, error) {
+	if len(ordererEndpoints) == 0 {
+		return nil, fmt.Errorf("no orderer endpoints available")
+	}
+
+	// Try each orderer in sequence until one succeeds
+	var lastErr error
+	for _, endpoint := range ordererEndpoints {
+		// Create options for this specific orderer
+		ordererOpts := []resmgmt.RequestOption{
+			resmgmt.WithOrdererEndpoint(endpoint),
+			resmgmt.WithRetry(retry.Opts{
+				Attempts:       3,
+				InitialBackoff: 1 * time.Second,
+				MaxBackoff:     10 * time.Second,
+			}),
+		}
+
+		// Add any other options that were passed in (except orderer endpoints)
+		for _, opt := range resmgmtOptions {
+			ordererOpts = append(ordererOpts, opt)
+		}
+
+		log.Infof("Attempting to query config block from orderer %s", endpoint)
+		block, err := resClient.QueryConfigBlockFromOrderer(channelID, ordererOpts...)
+		if err != nil {
+			log.Warnf("Failed to query config block from orderer %s: %v", endpoint, err)
+			lastErr = err
+			continue
+		}
+		log.Infof("Successfully queried config block from orderer %s", endpoint)
+		return block, nil
+	}
+
+	return nil, fmt.Errorf("failed to query config block from all orderers, last error: %v", lastErr)
+}
+
 func (r *FabricMainChannelReconciler) fetchOrdererChannelBlock(resClient *resmgmt.Client, fabricMainChannel *hlfv1alpha1.FabricMainChannel, resmgmtOptions []resmgmt.RequestOption) (*common.Block, error) {
 	var ordererChannelBlock *common.Block
 	var err error
@@ -403,7 +440,9 @@ func (r *FabricMainChannelReconciler) fetchOrdererChannelBlock(resClient *resmgm
 		InitialBackoff: 1000 * time.Millisecond,
 		MaxBackoff:     10 * time.Second,
 	}))
-	ordererChannelBlock, err = resClient.QueryConfigBlockFromOrderer(fabricMainChannel.Spec.Name, resmgmtOptions...)
+
+	options, endpoints := r.setupResmgmtOptions(fabricMainChannel)
+	ordererChannelBlock, err = r.queryConfigBlockFromOrdererWithRoundRobin(resClient, fabricMainChannel.Spec.Name, endpoints, options)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get block from channel %s", fabricMainChannel.Spec.Name)
 	}
@@ -478,18 +517,25 @@ func (r *FabricMainChannelReconciler) handleReconcileError(ctx context.Context, 
 	return r.updateCRStatusOrFailReconcile(ctx, r.Log, fabricMainChannel)
 }
 
-func (r *FabricMainChannelReconciler) setupResmgmtOptions(fabricMainChannel *hlfv1alpha1.FabricMainChannel) []resmgmt.RequestOption {
+func (r *FabricMainChannelReconciler) setupResmgmtOptions(fabricMainChannel *hlfv1alpha1.FabricMainChannel) ([]resmgmt.RequestOption, []string) {
 	resmgmtOptions := []resmgmt.RequestOption{
 		resmgmt.WithTimeout(fab2.ResMgmt, 30*time.Second),
+		resmgmt.WithRetry(retry.Opts{
+			Attempts:       3,
+			InitialBackoff: 1 * time.Second,
+			MaxBackoff:     10 * time.Second,
+		}),
 	}
 
+	var ordererEndpoints []string
 	for _, ordOrg := range fabricMainChannel.Spec.OrdererOrganizations {
 		for _, endpoint := range ordOrg.OrdererEndpoints {
-			resmgmtOptions = append(resmgmtOptions, resmgmt.WithOrdererEndpoint(endpoint))
+			ordererEndpoints = append(ordererEndpoints, endpoint)
+			// resmgmtOptions = append(resmgmtOptions)
 		}
 	}
 
-	return resmgmtOptions
+	return resmgmtOptions, ordererEndpoints
 }
 
 func (r *FabricMainChannelReconciler) fetchConfigBlock(resClient *resmgmt.Client, fabricMainChannel *hlfv1alpha1.FabricMainChannel, resmgmtOptions []resmgmt.RequestOption) ([]byte, error) {
@@ -501,11 +547,8 @@ func (r *FabricMainChannelReconciler) fetchConfigBlock(resClient *resmgmt.Client
 		MaxBackoff:     10 * time.Second,
 	}))
 
-	channelBlock, err = resClient.QueryConfigBlockFromOrderer(fabricMainChannel.Spec.Name, resmgmtOptions...)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to query config block from orderer %s", fabricMainChannel.Spec.Name)
-	}
-
+	options, endpoints := r.setupResmgmtOptions(fabricMainChannel)
+	channelBlock, err = r.queryConfigBlockFromOrdererWithRoundRobin(resClient, fabricMainChannel.Spec.Name, endpoints, options)
 	if err != nil {
 		log.Infof("Channel %s does not exist, creating it: %v", fabricMainChannel.Spec.Name, err)
 		return r.createNewChannel(fabricMainChannel)
