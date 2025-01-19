@@ -8,6 +8,9 @@ import (
 	"github.com/hyperledger/fabric-config/configtx/membership"
 	"github.com/hyperledger/fabric-config/configtx/orderer"
 	cb "github.com/hyperledger/fabric-protos-go/common"
+	sb "github.com/hyperledger/fabric-protos-go/orderer/smartbft"
+	"github.com/kfsoftware/hlf-operator/controllers/utils"
+	hlfv1alpha1 "github.com/kfsoftware/hlf-operator/pkg/apis/hlf.kungfusoftware.es/v1alpha1"
 	"github.com/pkg/errors"
 	"time"
 )
@@ -25,9 +28,11 @@ type PeerOrg struct {
 }
 
 type Consenter struct {
-	host    string
-	port    int
-	tlsCert *x509.Certificate
+	host     string
+	port     int
+	tlsCert  *x509.Certificate
+	signCert *x509.Certificate
+	mspId    string
 }
 type channelStore struct {
 }
@@ -38,6 +43,7 @@ type CreateChannelOptions struct {
 	name          string
 	batchSize     *orderer.BatchSize
 	batchDuration *time.Duration
+	consensus     hlfv1alpha1.OrdererConsensusType
 }
 
 func (o CreateChannelOptions) validate() error {
@@ -87,11 +93,18 @@ func WithPeerOrgs(peerOrgs ...PeerOrg) ChannelOption {
 		o.peerOrgs = peerOrgs
 	}
 }
-func CreateConsenter(host string, port int, tlsCert *x509.Certificate) Consenter {
+func WithConsensus(consensus hlfv1alpha1.OrdererConsensusType) ChannelOption {
+	return func(o *CreateChannelOptions) {
+		o.consensus = consensus
+	}
+}
+func CreateConsenter(host string, port int, tlsCert, signCert *x509.Certificate, mspId string) Consenter {
 	return Consenter{
-		host:    host,
-		port:    port,
-		tlsCert: tlsCert,
+		host:     host,
+		port:     port,
+		tlsCert:  tlsCert,
+		signCert: signCert,
+		mspId:    mspId,
 	}
 }
 func CreateOrdererOrg(mspID string, tlsRootCert *x509.Certificate, signRootCert *x509.Certificate, ordererUrls []string) OrdererOrg {
@@ -145,32 +158,75 @@ func (s channelStore) GetApplicationChannelBlock(ctx context.Context, opts ...Ch
 		}
 		peerOrgs = append(peerOrgs, genesisOrdererOrg)
 	}
-	var consenters []orderer.Consenter
-	for _, consenter := range o.consenters {
-		genesisConsenter := orderer.Consenter{
-			Address: orderer.EtcdAddress{
-				Host: consenter.host,
-				Port: consenter.port,
-			},
-			ClientTLSCert: consenter.tlsCert,
-			ServerTLSCert: consenter.tlsCert,
+	var consenters []orderer.Consenter   // raft consenter
+	consenterMapping := []cb.Consenter{} // bft consenter
+	var etcdRaft orderer.EtcdRaft
+	var smartBFTOptions *sb.Options
+	var ordererType string
+	channelCapabilities := []string{"V2_0"}
+	if o.consensus == hlfv1alpha1.OrdererConsensusEtcdraft {
+		ordererType = orderer.ConsensusTypeEtcdRaft
+		for _, consenter := range o.consenters {
+			genesisConsenter := orderer.Consenter{
+				Address: orderer.EtcdAddress{
+					Host: consenter.host,
+					Port: consenter.port,
+				},
+				ClientTLSCert: consenter.tlsCert,
+				ServerTLSCert: consenter.tlsCert,
+			}
+			consenters = append(consenters, genesisConsenter)
 		}
-		consenters = append(consenters, genesisConsenter)
+		etcdRaft = orderer.EtcdRaft{
+			Consenters: consenters,
+			Options: orderer.EtcdRaftOptions{
+				TickInterval:         "500ms",
+				ElectionTick:         10,
+				HeartbeatTick:        1,
+				MaxInflightBlocks:    5,
+				SnapshotIntervalSize: 16 * 1024 * 1024, // 16 MB
+			},
+		}
+	} else if o.consensus == hlfv1alpha1.OrdererConsensusBFT {
+		ordererType = orderer.ConsensusTypeBFT
+		channelCapabilities = append(channelCapabilities, "V3_0")
+		for i, consenter := range o.consenters {
+			consenterMapping = append(consenterMapping, cb.Consenter{
+				Host:          consenter.host,
+				Port:          uint32(consenter.port),
+				MspId:         consenter.mspId,
+				Id:            uint32(i + 1),
+				Identity:      utils.EncodeX509Certificate(consenter.signCert),
+				ClientTlsCert: utils.EncodeX509Certificate(consenter.tlsCert),
+				ServerTlsCert: utils.EncodeX509Certificate(consenter.tlsCert),
+			})
+		}
+		smartBFTOptions = &sb.Options{
+			RequestBatchMaxCount:      100,
+			RequestBatchMaxInterval:   "50ms",
+			RequestForwardTimeout:     "2s",
+			RequestComplainTimeout:    "20s",
+			RequestAutoRemoveTimeout:  "3m0s",
+			ViewChangeResendInterval:  "5s",
+			ViewChangeTimeout:         "20s",
+			LeaderHeartbeatTimeout:    "1m0s",
+			CollectTimeout:            "1s",
+			RequestBatchMaxBytes:      10485760,
+			IncomingMessageBufferSize: 200,
+			RequestPoolSize:           100000,
+			LeaderHeartbeatCount:      10,
+		}
+	} else {
+		return nil, fmt.Errorf("orderer type %s not supported", ordererType)
 	}
+
 	channelConfig := configtx.Channel{
 		Orderer: configtx.Orderer{
-			OrdererType:   "etcdraft",
-			Organizations: ordererOrgs,
-			EtcdRaft: orderer.EtcdRaft{
-				Consenters: consenters,
-				Options: orderer.EtcdRaftOptions{
-					TickInterval:         "500ms",
-					ElectionTick:         10,
-					HeartbeatTick:        1,
-					MaxInflightBlocks:    5,
-					SnapshotIntervalSize: 16 * 1024 * 1024, // 16 MB
-				},
-			},
+			ConsenterMapping: consenterMapping,
+			OrdererType:      ordererType,
+			Organizations:    ordererOrgs,
+			EtcdRaft:         etcdRaft,
+			SmartBFT:         smartBFTOptions,
 			Policies: map[string]configtx.Policy{
 				"Readers": {
 					Type: "ImplicitMeta",
@@ -196,7 +252,7 @@ func (s channelStore) GetApplicationChannelBlock(ctx context.Context, opts ...Ch
 				PreferredMaxBytes: 512 * 1024,
 			},
 			BatchTimeout: 2 * time.Second,
-			State:        "STATE_NORMAL",
+			State:        orderer.ConsensusStateNormal,
 		},
 		Application: configtx.Application{
 			Organizations: peerOrgs,
@@ -225,7 +281,7 @@ func (s channelStore) GetApplicationChannelBlock(ctx context.Context, opts ...Ch
 			},
 			ACLs: defaultACLs(),
 		},
-		Capabilities: []string{"V2_0"},
+		Capabilities: channelCapabilities,
 		Policies: map[string]configtx.Policy{
 			"Readers": {
 				Type: "ImplicitMeta",

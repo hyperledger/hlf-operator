@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	"fmt"
+	"strings"
 
 	sb "github.com/hyperledger/fabric-protos-go/orderer/smartbft"
 	"github.com/kfsoftware/hlf-operator/pkg/status"
@@ -2578,6 +2579,48 @@ const (
 
 	ConsensusStateMaintenance FabricMainChannelConsensusState = "STATE_MAINTENANCE"
 )
+
+type ConsensusTypeValue struct {
+	value   *OrdererConsensusType
+	allowed []OrdererConsensusType
+}
+
+func (c *ConsensusTypeValue) String() string {
+	if c.value == nil {
+		return ""
+	}
+	return string(*c.value)
+}
+
+func (c *ConsensusTypeValue) Set(s string) error {
+	for _, v := range c.allowed {
+		if string(v) == s {
+			*c.value = v
+			return nil
+		}
+	}
+	return fmt.Errorf("invalid consensus type: %s. Valid types are: %s", s, strings.Join(c.allowedStrings(), ", "))
+}
+
+func (c *ConsensusTypeValue) Type() string {
+	return "ConsensusType"
+}
+
+func (c *ConsensusTypeValue) allowedStrings() []string {
+	var allowedStrs []string
+	for _, v := range c.allowed {
+		allowedStrs = append(allowedStrs, string(v))
+	}
+	return allowedStrs
+}
+
+func NewConsensusTypeValue(val OrdererConsensusType, allowed []OrdererConsensusType, p *OrdererConsensusType) *ConsensusTypeValue {
+	*p = val
+	return &ConsensusTypeValue{
+		value:   p,
+		allowed: allowed,
+	}
+}
 
 type FabricMainChannelOrdererBatchSize struct {
 	// The number of transactions that can fit in a block.
