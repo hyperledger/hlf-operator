@@ -1421,20 +1421,41 @@ func updateOrdererChannelConfigTx(currentConfigTX configtx.ConfigTx, newConfigTx
 		}
 		for _, consenter := range ord.EtcdRaft.Consenters {
 			deleted := true
+			needsUpdate := false
+			var matchingNewConsenter orderer.Consenter
+			
 			for _, newConsenter := range newConfigTx.Orderer.EtcdRaft.Consenters {
 				if newConsenter.Address.Host == consenter.Address.Host && newConsenter.Address.Port == consenter.Address.Port {
 					deleted = false
+					matchingNewConsenter = newConsenter
+					// Check if TLS certs are different
+					if !bytes.Equal(newConsenter.ClientTLSCert.Raw, consenter.ClientTLSCert.Raw) || 
+					   !bytes.Equal(newConsenter.ServerTLSCert.Raw, consenter.ServerTLSCert.Raw) {
+						needsUpdate = true
+					}
 					break
 				}
 			}
+			
 			if deleted {
 				log.Infof("Removing consenter %s:%d", consenter.Address.Host, consenter.Address.Port)
 				err = currentConfigTX.Orderer().RemoveConsenter(consenter)
 				if err != nil {
 					return errors.Wrapf(err, "failed to remove consenter %s:%d", consenter.Address.Host, consenter.Address.Port)
 				}
+			} else if needsUpdate {
+				log.Infof("Updating certificates for consenter %s:%d", consenter.Address.Host, consenter.Address.Port)
+				err = currentConfigTX.Orderer().RemoveConsenter(consenter)
+				if err != nil {
+					return errors.Wrapf(err, "failed to remove consenter %s:%d for cert update", consenter.Address.Host, consenter.Address.Port)
+				}
+				err = currentConfigTX.Orderer().AddConsenter(matchingNewConsenter)
+				if err != nil {
+					return errors.Wrapf(err, "failed to add updated consenter %s:%d", consenter.Address.Host, consenter.Address.Port)
+				}
 			}
 		}
+
 		for _, newConsenter := range newConfigTx.Orderer.EtcdRaft.Consenters {
 			found := false
 			for _, consenter := range ord.EtcdRaft.Consenters {
