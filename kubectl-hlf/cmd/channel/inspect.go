@@ -3,14 +3,15 @@ package channel
 import (
 	"bytes"
 	"fmt"
+	"io"
+
+	"github.com/hyperledger/fabric-config/protolator"
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/resmgmt"
 	"github.com/hyperledger/fabric-sdk-go/pkg/core/config"
 	"github.com/hyperledger/fabric-sdk-go/pkg/fab/resource"
 	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
-	"github.com/hyperledger/fabric/common/tools/protolator"
 	"github.com/kfsoftware/hlf-operator/kubectl-hlf/cmd/helpers"
 	"github.com/spf13/cobra"
-	"io"
 )
 
 type inspectChannelCmd struct {
@@ -18,6 +19,7 @@ type inspectChannelCmd struct {
 	peer        string
 	channelName string
 	userName    string
+	ordererName string
 }
 
 func (c *inspectChannelCmd) validate() error {
@@ -50,9 +52,11 @@ func (c *inspectChannelCmd) run(out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	block, err := resClient.QueryConfigBlockFromOrderer(
-		c.channelName,
-	)
+	resmgmtOptions := []resmgmt.RequestOption{}
+	if c.ordererName != "" {
+		resmgmtOptions = append(resmgmtOptions, resmgmt.WithOrdererEndpoint(c.ordererName))
+	}
+	block, err := resClient.QueryConfigBlockFromOrderer(c.channelName, resmgmtOptions...)
 	if err != nil {
 		return err
 	}
@@ -87,6 +91,7 @@ func newInspectChannelCMD(out io.Writer, errOut io.Writer) *cobra.Command {
 	persistentFlags.StringVarP(&c.userName, "user", "u", "", "User name for the transaction")
 	persistentFlags.StringVarP(&c.channelName, "channel", "c", "", "Channel name")
 	persistentFlags.StringVarP(&c.configPath, "config", "", "", "Configuration file for the SDK")
+	persistentFlags.StringVarP(&c.ordererName, "orderer", "o", "", "Orderer endpoint to fetch config from (optional)")
 	cmd.MarkPersistentFlagRequired("channel")
 	cmd.MarkPersistentFlagRequired("user")
 	cmd.MarkPersistentFlagRequired("peer")
