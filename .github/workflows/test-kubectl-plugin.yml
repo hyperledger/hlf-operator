@@ -313,13 +313,14 @@ jobs:
             ordererOrganizations:
               - caName: "ord-ca"
                 caNamespace: "default"
-                externalOrderersToJoin:
-                  - host: ord-node1.default
-                    port: 7053
+                externalOrderersToJoin: []
                 mspID: OrdererMSP
                 ordererEndpoints:
                   - orderer0-ord.localho.st:443
-                orderersToJoin: []
+                orderersToJoin: 
+                    - name: ord-node1
+                      namespace: default
+
             orderers:
               - host: orderer0-ord.localho.st
                 port: 443
