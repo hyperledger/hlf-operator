@@ -116,21 +116,42 @@ func (r *FabricMainChannelReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return r.handleReconcileError(ctx, fabricMainChannel, err)
 	}
 
-	options, _ := r.setupResmgmtOptions(fabricMainChannel)
+	options, endpoints := r.setupResmgmtOptions(fabricMainChannel)
 
-	blockBytes, err := r.fetchConfigBlock(resClient, fabricMainChannel)
+	// Try to get existing channel config
+	channelBlock, err := r.queryConfigBlockFromOrdererWithRoundRobin(resClient, fabricMainChannel.Spec.Name, endpoints, options)
 	if err != nil {
-		return r.handleReconcileError(ctx, fabricMainChannel, err)
-	}
+		// Channel doesn't exist, create it and join orderers
+		log.Infof("Channel %s does not exist, creating it", fabricMainChannel.Spec.Name)
+		blockBytes, err := r.createNewChannel(fabricMainChannel)
+		if err != nil {
+			return r.handleReconcileError(ctx, fabricMainChannel, errors.Wrap(err, "failed to create new channel"))
+		}
 
-	if err := r.joinOrderers(ctx, fabricMainChannel, clientSet, hlfClientSet, blockBytes); err != nil {
-		return r.handleReconcileError(ctx, fabricMainChannel, err)
-	}
+		// Join orderers to the channel
+		if err := r.joinOrderers(ctx, fabricMainChannel, clientSet, hlfClientSet, blockBytes); err != nil {
+			return r.handleReconcileError(ctx, fabricMainChannel, errors.Wrap(err, "failed to join orderers to channel"))
+		}
 
+		// Wait for orderers to stabilize
+		time.Sleep(5 * time.Second)
+
+		// Get the config block after channel creation
+		channelBlock, err = r.queryConfigBlockFromOrdererWithRoundRobin(resClient, fabricMainChannel.Spec.Name, endpoints, options)
+		if err != nil {
+			return r.handleReconcileError(ctx, fabricMainChannel, errors.Wrap(err, "failed to get config block after creating channel"))
+		}
+	}
+	_ = channelBlock
+
+	// Update channel config if needed
 	if err := r.updateChannelConfig(ctx, fabricMainChannel, resClient, options, sdk, clientSet); err != nil {
 		return r.handleReconcileError(ctx, fabricMainChannel, err)
 	}
+
 	time.Sleep(3 * time.Second)
+
+	// Save channel config
 	if err := r.saveChannelConfig(ctx, fabricMainChannel, resClient); err != nil {
 		return r.handleReconcileError(ctx, fabricMainChannel, err)
 	}
@@ -529,17 +550,11 @@ func (r *FabricMainChannelReconciler) setupResmgmtOptions(fabricMainChannel *hlf
 }
 
 func (r *FabricMainChannelReconciler) fetchConfigBlock(resClient *resmgmt.Client, fabricMainChannel *hlfv1alpha1.FabricMainChannel) ([]byte, error) {
-	var channelBlock *cb.Block
-	var err error
-
 	options, endpoints := r.setupResmgmtOptions(fabricMainChannel)
-	channelBlock, err = r.queryConfigBlockFromOrdererWithRoundRobin(resClient, fabricMainChannel.Spec.Name, endpoints, options)
+	channelBlock, err := r.queryConfigBlockFromOrdererWithRoundRobin(resClient, fabricMainChannel.Spec.Name, endpoints, options)
 	if err != nil {
-		log.Infof("Channel %s does not exist, creating it: %v", fabricMainChannel.Spec.Name, err)
-		return r.createNewChannel(fabricMainChannel)
+		return nil, errors.Wrapf(err, "failed to get block from channel %s", fabricMainChannel.Spec.Name)
 	}
-
-	log.Infof("Channel %s already exists", fabricMainChannel.Spec.Name)
 	return proto.Marshal(channelBlock)
 }
 
