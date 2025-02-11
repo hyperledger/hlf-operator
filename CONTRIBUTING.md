@@ -10,7 +10,7 @@
 ### Install controller-gen
 
 ```bash
-go install  sigs.k8s.io/controller-tools/cmd/controller-gen@0.16.4
+go install  sigs.k8s.io/controller-tools/cmd/controller-gen@v0.16.4
 ```
 
 
